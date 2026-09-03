@@ -1,4 +1,25 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // ── Safari / iOS polyfill ────────────────────────────────
+    // requestIdleCallback is not supported in Safari (macOS or iOS).
+    // Fall back to setTimeout so deferred work still runs.
+    if (typeof window.requestIdleCallback !== 'function') {
+        window.requestIdleCallback = function (cb, opts) {
+            const timeout = (opts && opts.timeout) || 50;
+            return setTimeout(function () {
+                const start = Date.now();
+                cb({
+                    didTimeout: false,
+                    timeRemaining: function () {
+                        return Math.max(0, 50 - (Date.now() - start));
+                    }
+                });
+            }, 1);
+        };
+        window.cancelIdleCallback = function (id) {
+            clearTimeout(id);
+        };
+    }
+
     const form = document.getElementById('check-form');
     const urlsInput = document.getElementById('product-urls'); // hidden textarea for form compat
     const urlInlineInput = document.getElementById('product-urls-input');
