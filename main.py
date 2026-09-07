@@ -138,14 +138,22 @@ def search_products(request: Request, term: str = Query(..., description="Search
             price_str = f"₹{price_val}" if price_val else ""
             img_val = ""
             imgs = p.get("prd_images")
+            raw_img = ""
             if isinstance(imgs, list) and len(imgs) > 0:
                 first_img = imgs[0]
                 if isinstance(first_img, dict):
-                    img_val = str(first_img.get("pro_images") or first_img.get("image") or first_img.get("src") or "")
+                    raw_img = str(first_img.get("pro_images") or first_img.get("image") or first_img.get("src") or "")
                 elif isinstance(first_img, str):
-                    img_val = first_img
+                    raw_img = first_img
             elif isinstance(imgs, str):
-                img_val = imgs
+                raw_img = imgs
+
+            if raw_img:
+                if raw_img.startswith("http"):
+                    img_val = raw_img
+                else:
+                    img_val = f"https://www.karzanddolls.com/karzOffice/public/assets/productimages/{raw_img}"
+
             prod_url = f"https://www.karzanddolls.com/details/{slug}?pid={pid}" if (slug and pid) else ""
             items.append(SearchItem(
                 product_name=name,

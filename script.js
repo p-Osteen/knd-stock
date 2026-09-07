@@ -969,67 +969,61 @@ document.addEventListener('DOMContentLoaded', () => {
             next();
         });
     }
-    const tabBtnPaste = document.getElementById('tab-btn-paste');
-    const tabBtnSearch = document.getElementById('tab-btn-search');
-    const panelPaste = document.getElementById('panel-paste');
-    const panelSearch = document.getElementById('panel-search');
-
-    if (tabBtnPaste && tabBtnSearch) {
-        tabBtnPaste.addEventListener('click', () => switchTab('paste'));
-        tabBtnSearch.addEventListener('click', () => switchTab('search'));
-    }
-
-    function switchTab(tabName) {
-        if (tabName === 'paste') {
-            tabBtnPaste.classList.add('active');
-            tabBtnSearch.classList.remove('active');
-            panelPaste.classList.remove('hidden');
-            panelSearch.classList.add('hidden');
-        } else {
-            tabBtnSearch.classList.add('active');
-            tabBtnPaste.classList.remove('active');
-            panelSearch.classList.remove('hidden');
-            panelPaste.classList.add('hidden');
-        }
-    }
-
-    const kndSearchInput = document.getElementById('knd-search-input');
-    const kndSearchBtn = document.getElementById('knd-search-btn');
+    const kndSearchDropdown = document.getElementById('knd-search-dropdown');
     const kndSearchResults = document.getElementById('knd-search-results');
-    const searchBulkActions = document.getElementById('search-bulk-actions');
-    const addAllSearchBtn = document.getElementById('add-all-search-btn');
+    let searchDebounceTimer = null;
 
-    let currentSearchResults = [];
+    urlInlineInput.addEventListener('input', () => {
+        const val = urlInlineInput.value.trim();
+        if (isKndUrl(val) || val.startsWith('http://') || val.startsWith('https://')) {
+            hideSearchDropdown();
+            return;
+        }
 
-    if (kndSearchBtn && kndSearchInput) {
-        kndSearchBtn.addEventListener('click', performKNDSearch);
-        kndSearchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') performKNDSearch();
-        });
+        if (val.length >= 2) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                performKNDSearch(val);
+            }, 300);
+        } else {
+            hideSearchDropdown();
+        }
+    });
+
+    urlInlineInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            hideSearchDropdown();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.url-input-row')) {
+            hideSearchDropdown();
+        }
+    });
+
+    function hideSearchDropdown() {
+        if (kndSearchDropdown) kndSearchDropdown.classList.add('hidden');
     }
 
-    async function performKNDSearch() {
-        const term = kndSearchInput.value.trim();
-        if (!term) return;
+    async function performKNDSearch(term) {
+        if (!kndSearchDropdown || !kndSearchResults) return;
 
+        kndSearchDropdown.classList.remove('hidden');
         kndSearchResults.innerHTML = `
             <div class="search-loading">
                 <div class="loading-dots"><span></span><span></span><span></span></div>
-                <p>Searching Karz and Dolls...</p>
+                <p>Searching catalog for "${escapeHtml(term)}"...</p>
             </div>
         `;
-        if (searchBulkActions) searchBulkActions.classList.add('hidden');
 
         try {
             const response = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`);
             const data = await response.json();
 
             if (data.success && data.products && data.products.length > 0) {
-                currentSearchResults = data.products;
                 renderSearchResults(data.products);
-                if (searchBulkActions) searchBulkActions.classList.remove('hidden');
             } else {
-                currentSearchResults = [];
                 kndSearchResults.innerHTML = `<div class="search-empty"><p>No products found for "${escapeHtml(term)}"</p></div>`;
             }
         } catch (err) {
@@ -1042,44 +1036,31 @@ document.addEventListener('DOMContentLoaded', () => {
         products.forEach((p) => {
             const item = document.createElement('div');
             item.className = 'search-item';
-            const imgUrl = p.image ? (p.image.startsWith('http') ? p.image : `https://www.karzanddolls.com/uploads/product_images/${p.image}`) : '';
-            const badgeClass = p.stock_quantity > 0 ? 'badge in-stock' : 'badge out-of-stock';
-            const badgeText = p.stock_quantity > 0 ? `In Stock (${p.stock_quantity})` : 'Out of Stock';
+            const imgUrl = p.image || '';
 
             item.innerHTML = `
                 <div class="search-item__thumb">
                     ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(p.product_name)}" />` : `<i class="fa-solid fa-box"></i>`}
                 </div>
                 <div class="search-item__info">
-                    <h4 class="search-item__name">${escapeHtml(p.product_name)}</h4>
-                    <div class="search-item__meta">
-                        <span class="search-item__price">${escapeHtml(p.price)}</span>
-                        <span class="${badgeClass}">${badgeText}</span>
-                    </div>
+                    <h4 class="search-item__name" title="${escapeHtml(p.product_name)}">${escapeHtml(p.product_name)}</h4>
+                    <span class="search-item__price">${escapeHtml(p.price)}</span>
                 </div>
-                <button type="button" class="btn-add-search-item" title="Add to checker queue">
+                <button type="button" class="btn-add-search-item" title="Add to queue">
                     <i class="fa-solid fa-plus"></i>
                 </button>
             `;
 
-            item.querySelector('.btn-add-search-item').addEventListener('click', () => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
                 if (p.url) {
                     addUrls(p.url);
-                    switchTab('paste');
+                    urlInlineInput.value = '';
+                    hideSearchDropdown();
                 }
             });
 
             kndSearchResults.appendChild(item);
-        });
-    }
-
-    if (addAllSearchBtn) {
-        addAllSearchBtn.addEventListener('click', () => {
-            const urlsToAdd = currentSearchResults.map(p => p.url).filter(u => u);
-            if (urlsToAdd.length > 0) {
-                addUrls(urlsToAdd.join('\n'));
-                switchTab('paste');
-            }
         });
     }
 
