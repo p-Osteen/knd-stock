@@ -997,7 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.addEventListener('click', (e) => {
-        if (!e.target.closest('.url-input-row')) {
+        if (!e.target.closest('#url-chips-container') && !e.target.closest('#knd-search-dropdown')) {
             hideSearchDropdown();
         }
     });
