@@ -1541,7 +1541,6 @@ body {
     background: var(--border-default);
     color: var(--text-primary);
 }
-}
 
 @media (max-width: 900px) {
     .loc-mobile {
