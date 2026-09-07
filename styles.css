@@ -1,4 +1,4 @@
-﻿
+
 :root {
 
     --bg-base: #08090e;
@@ -1294,7 +1294,23 @@ body {
     color: #fff;
 }
 
+.loc-mobile {
+    display: none;
+}
+
+.loc-desktop {
+    display: inline;
+}
+
 @media (max-width: 900px) {
+    .loc-mobile {
+        display: inline;
+    }
+
+    .loc-desktop {
+        display: none;
+    }
+
     .dashboard {
         flex-direction: column;
     }
