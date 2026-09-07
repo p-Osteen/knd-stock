@@ -53,6 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let parsedUrlCache = [];
     let totalChars = 0;
 
+    const urlImageMap = new Map();
+
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
     themeIcon.className = currentTheme === 'dark' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
 
@@ -288,7 +290,18 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.dataset.index = index;
         btn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
 
-        chip.appendChild(idx);
+        const chipUrl = urls[index];
+        const imgUrl = urlImageMap.get(chipUrl);
+
+        if (imgUrl) {
+            const thumbImg = document.createElement('img');
+            thumbImg.className = 'url-chip__thumb';
+            thumbImg.src = imgUrl;
+            thumbImg.alt = '';
+            chip.appendChild(thumbImg);
+        } else {
+            chip.appendChild(idx);
+        }
         chip.appendChild(textSpan);
         chip.appendChild(btn);
 
@@ -711,6 +724,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 stockDisplayEl.style.display = 'flex';
                 nameEl.textContent = data.product_name;
 
+                if (data.image) {
+                    urlImageMap.set(url, data.image);
+                    renderChips();
+
+                    let cardThumb = card.querySelector('.card-product-thumb');
+                    if (!cardThumb) {
+                        cardThumb = document.createElement('div');
+                        cardThumb.className = 'card-product-thumb';
+                        stockDisplayEl.insertBefore(cardThumb, stockDisplayEl.firstChild);
+                    }
+                    cardThumb.innerHTML = `<img src="${escapeHtml(data.image)}" alt="${escapeHtml(data.product_name)}" />`;
+                }
+
                 animateValue(qtyEl, 0, data.stock_quantity, 900);
 
                 let actionBtn = card.querySelector('.card-action-btn');
@@ -1073,17 +1099,20 @@ document.addEventListener('DOMContentLoaded', () => {
             item.addEventListener('click', (e) => {
                 if (e.target.closest('.btn-quick-add')) {
                     e.stopPropagation();
+                    if (p.image) urlImageMap.set(p.url, p.image);
                     addUrls(p.url);
                     return;
                 }
                 if (e.target !== checkbox) {
                     checkbox.checked = !checkbox.checked;
                 }
+                if (p.image) urlImageMap.set(p.url, p.image);
                 toggleItemSelection(p.url, checkbox.checked, item);
             });
 
             checkbox.addEventListener('change', (e) => {
                 e.stopPropagation();
+                if (p.image) urlImageMap.set(p.url, p.image);
                 toggleItemSelection(p.url, checkbox.checked, item);
             });
 
@@ -1113,6 +1142,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const prod = products[idx];
                 if (prod && prod.url) {
                     cb.checked = !allSelected;
+                    if (prod.image) urlImageMap.set(prod.url, prod.image);
                     const itemEl = cb.closest('.search-item');
                     toggleItemSelection(prod.url, !allSelected, itemEl);
                 }
@@ -1123,6 +1153,11 @@ document.addEventListener('DOMContentLoaded', () => {
         addSelectedBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (selectedSearchUrls.size > 0) {
+                products.forEach(p => {
+                    if (selectedSearchUrls.has(p.url) && p.image) {
+                        urlImageMap.set(p.url, p.image);
+                    }
+                });
                 const urlList = Array.from(selectedSearchUrls).join('\n');
                 addUrls(urlList);
                 urlInlineInput.value = '';

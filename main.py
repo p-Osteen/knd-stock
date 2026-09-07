@@ -54,6 +54,7 @@ class StockResponse(BaseModel):
     stock_quantity: int
     success: bool
     message: str = ""
+    image: str = ""
 
 
 class SearchItem(BaseModel):
@@ -221,11 +222,24 @@ def check_stock(request: Request, url: str = Query(..., description="The product
             elif not isinstance(pro_stock, int):
                 pro_stock = 0
 
+            img_val = ""
+            imgs = product_details.get("prd_images")
+            if isinstance(imgs, list) and len(imgs) > 0:
+                first_img = imgs[0]
+                raw_img = ""
+                if isinstance(first_img, dict):
+                    raw_img = str(first_img.get("pro_images") or first_img.get("image") or "")
+                elif isinstance(first_img, str):
+                    raw_img = first_img
+                if raw_img:
+                    img_val = raw_img if raw_img.startswith("http") else f"https://www.karzanddolls.com/karzOffice/public/assets/productimages/{raw_img}"
+
             return StockResponse(
                 product_name=pro_name,
                 stock_quantity=pro_stock,
                 success=True,
                 message="Stock retrieved successfully.",
+                image=img_val,
             )
         else:
             return StockResponse(
