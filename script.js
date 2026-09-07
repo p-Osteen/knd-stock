@@ -1031,14 +1031,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let selectedSearchUrls = new Set();
+
     function renderSearchResults(products) {
         kndSearchResults.innerHTML = '';
+        selectedSearchUrls.clear();
+
+        const listHeader = document.createElement('div');
+        listHeader.className = 'search-dropdown-header';
+        listHeader.innerHTML = `
+            <span class="search-count">${products.length} items</span>
+            <button type="button" class="btn-select-all" id="btn-select-all">Select All</button>
+        `;
+        kndSearchResults.appendChild(listHeader);
+
+        const itemsContainer = document.createElement('div');
+        itemsContainer.className = 'search-items-container';
+
         products.forEach((p) => {
+            if (!p.url) return;
             const item = document.createElement('div');
             item.className = 'search-item';
             const imgUrl = p.image || '';
 
             item.innerHTML = `
+                <input type="checkbox" class="search-item-checkbox" data-url="${escapeHtml(p.url)}" />
                 <div class="search-item__thumb">
                     ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(p.product_name)}" />` : `<i class="fa-solid fa-box"></i>`}
                 </div>
@@ -1046,22 +1063,88 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h4 class="search-item__name" title="${escapeHtml(p.product_name)}">${escapeHtml(p.product_name)}</h4>
                     <span class="search-item__price">${escapeHtml(p.price)}</span>
                 </div>
-                <button type="button" class="btn-add-search-item" title="Add to queue">
+                <button type="button" class="btn-quick-add" title="Quick add">
                     <i class="fa-solid fa-plus"></i>
                 </button>
             `;
 
+            const checkbox = item.querySelector('.search-item-checkbox');
+
             item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (p.url) {
+                if (e.target.closest('.btn-quick-add')) {
+                    e.stopPropagation();
                     addUrls(p.url);
-                    urlInlineInput.value = '';
-                    hideSearchDropdown();
+                    return;
                 }
+                if (e.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                }
+                toggleItemSelection(p.url, checkbox.checked, item);
             });
 
-            kndSearchResults.appendChild(item);
+            checkbox.addEventListener('change', (e) => {
+                e.stopPropagation();
+                toggleItemSelection(p.url, checkbox.checked, item);
+            });
+
+            itemsContainer.appendChild(item);
         });
+
+        kndSearchResults.appendChild(itemsContainer);
+
+        const listFooter = document.createElement('div');
+        listFooter.className = 'search-dropdown-footer';
+        listFooter.innerHTML = `
+            <button type="button" class="btn btn--primary btn--sm" id="btn-add-selected" disabled style="width: 100%; justify-content: center;">
+                Add Selected to Queue (0)
+            </button>
+        `;
+        kndSearchResults.appendChild(listFooter);
+
+        const selectAllBtn = listHeader.querySelector('#btn-select-all');
+        const addSelectedBtn = listFooter.querySelector('#btn-add-selected');
+
+        selectAllBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const allCheckboxes = itemsContainer.querySelectorAll('.search-item-checkbox');
+            const allSelected = selectedSearchUrls.size === products.length;
+
+            allCheckboxes.forEach((cb, idx) => {
+                const prod = products[idx];
+                if (prod && prod.url) {
+                    cb.checked = !allSelected;
+                    const itemEl = cb.closest('.search-item');
+                    toggleItemSelection(prod.url, !allSelected, itemEl);
+                }
+            });
+            selectAllBtn.textContent = allSelected ? 'Select All' : 'Deselect All';
+        });
+
+        addSelectedBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (selectedSearchUrls.size > 0) {
+                const urlList = Array.from(selectedSearchUrls).join('\n');
+                addUrls(urlList);
+                urlInlineInput.value = '';
+                hideSearchDropdown();
+            }
+        });
+    }
+
+    function toggleItemSelection(url, isSelected, itemEl) {
+        if (isSelected) {
+            selectedSearchUrls.add(url);
+            if (itemEl) itemEl.classList.add('selected');
+        } else {
+            selectedSearchUrls.delete(url);
+            if (itemEl) itemEl.classList.remove('selected');
+        }
+
+        const addSelectedBtn = document.getElementById('btn-add-selected');
+        if (addSelectedBtn) {
+            addSelectedBtn.disabled = selectedSearchUrls.size === 0;
+            addSelectedBtn.textContent = `Add Selected to Queue (${selectedSearchUrls.size})`;
+        }
     }
 
     const resultsToolbar = document.getElementById('results-toolbar');
