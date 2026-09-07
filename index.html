@@ -1,12 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>KND Stock Checker — Real-time Inventory Lookup</title>
-    <meta name="description"
-        content="Instantly check product stock levels on Karz and Dolls. Paste URLs, get real-time inventory data.">
+    <title>KND Stock Checker — Live Inventory Lookup</title>
+    <meta name="description" content="Check product stock counts on Karz and Dolls instantly. Search product names or paste links.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -15,14 +14,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/regular.min.css">
     <link rel="stylesheet" href="styles.css">
     <link rel="dns-prefetch" href="https://cdn.sheetjs.com">
-
-    <script>
-        (function () {
-            var theme = 'dark';
-            try { theme = localStorage.getItem('knd-theme') || 'dark'; } catch (e) { }
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
-    </script>
 </head>
 
 <body>
@@ -33,180 +24,165 @@
         <div class="mesh-grain"></div>
     </div>
 
-    <div class="dashboard">
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar__top">
-                <nav class="topbar">
-                    <div class="topbar__brand">
-                        <div class="topbar__logo" aria-label="KND Logo">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <path
-                                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                                <line x1="12" y1="22.08" x2="12" y2="12" />
-                            </svg>
-                        </div>
-                        <span class="topbar__title">KND Stock</span>
-                    </div>
-                    <button type="button" id="theme-toggle" class="topbar__btn" aria-label="Toggle theme">
-                        <i class="fa-solid fa-moon" id="theme-icon"></i>
-                    </button>
-                </nav>
+    <div class="app-layout">
+        <header class="app-header">
+            <div class="header-brand">
+                <div class="header-logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                        <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                </div>
+                <span class="header-title">KND Stock Checker</span>
+            </div>
 
-                <header class="hero">
-                    <div class="hero__badge">
-                        <span class="hero__badge-dot"></span>
-                        Real-time inventory
-                    </div>
-                    <h1 class="hero__title">Check Stock <span class="hero__title--accent">Instantly</span></h1>
-                    <p class="hero__subtitle">Paste <strong>karzanddolls.com</strong> product URLs to get live stock
-                        counts.</p>
-                </header>
-                <form id="check-form" class="stock-form" autocomplete="off">
-                    <div class="form-card">
-                        <div class="form-card__header">
-                            <div class="form-card__icon">
-                                <i class="fa-solid fa-layer-group"></i>
-                            </div>
-                            <div>
-                                <h2 class="form-card__title">Product Queue</h2>
-                                <p class="form-card__desc">Search catalog or paste URLs</p>
+            <div class="steps-banner">
+                <div class="step-item">
+                    <span class="step-num">1</span>
+                    <span>Type name or paste link</span>
+                </div>
+                <i class="fa-solid fa-chevron-right step-arrow"></i>
+                <div class="step-item">
+                    <span class="step-num">2</span>
+                    <span>Tap Check Stock</span>
+                </div>
+                <i class="fa-solid fa-chevron-right step-arrow"></i>
+                <div class="step-item">
+                    <span class="step-num">3</span>
+                    <span>See live stock</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <form id="check-form" class="super-form" autocomplete="off">
+                <div class="super-bar-card">
+                    <div class="super-bar-row">
+                        <div class="super-input-wrapper">
+                            <i class="fa-solid fa-magnifying-glass super-search-icon"></i>
+                            <input type="text" id="product-urls-input" class="super-input"
+                                placeholder="Type product name (e.g. Ronin, Mustang) or paste link here…" spellcheck="false" autocomplete="off" />
+                            <div id="knd-search-dropdown" class="search-dropdown hidden">
+                                <div id="knd-search-results" class="search-dropdown-list"></div>
                             </div>
                         </div>
+                        <button type="submit" id="submit-btn" class="super-btn">
+                            <span class="btn__text">Check Stock</span>
+                            <i class="fa-solid fa-bolt btn__icon"></i>
+                            <div class="btn__loader hidden" id="btn-loader"></div>
+                        </button>
+                    </div>
 
+                    <div class="batch-toggle-bar">
+                        <button type="button" id="toggle-batch-btn" class="batch-toggle-btn">
+                            <i class="fa-solid fa-layer-group"></i>
+                            <span id="batch-toggle-text">Multiple links queued (0)</span>
+                            <i class="fa-solid fa-chevron-down chevron-icon" id="batch-chevron"></i>
+                        </button>
+                    </div>
+
+                    <div id="batch-panel" class="batch-panel hidden">
                         <div class="url-chips-container" id="url-chips-container">
                             <div class="url-chips-scroll" id="url-chips-scroll">
-                                <div class="url-chips-list" id="url-chips-list" role="listbox"
-                                    aria-label="Added URLs">
-                                </div>
-                                <div class="url-input-row">
-                                    <input type="text" id="product-urls-input" class="url-inline-input"
-                                        placeholder="Search catalog or paste product URLs…" spellcheck="false"
-                                        autocomplete="off" />
-                                </div>
+                                <div class="url-chips-list" id="url-chips-list" role="listbox" aria-label="Added URLs"></div>
                             </div>
                             <div class="url-chips-footer">
-                                <span class="url-counter" id="url-counter">0 URLs</span>
+                                <span class="url-counter" id="url-counter">0 Links Queued</span>
                                 <div class="url-chips-footer__actions">
-                                    <button type="button" class="url-paste-btn" id="paste-btn"
-                                        title="Paste from clipboard">
+                                    <button type="button" class="url-paste-btn" id="paste-btn" title="Paste from clipboard">
                                         <i class="fa-regular fa-clipboard"></i>
-                                        <span>Paste</span>
+                                        <span>Paste Link</span>
                                     </button>
-                                    <button type="button" class="url-paste-btn" id="upload-btn"
-                                        title="Upload CSV, TXT, or Excel file">
+                                    <button type="button" class="url-paste-btn" id="upload-btn" title="Upload CSV, TXT, or Excel file">
                                         <i class="fa-solid fa-file-arrow-up"></i>
-                                        <span>Upload</span>
+                                        <span>Upload File</span>
                                     </button>
-                                    <input type="file" id="file-upload-input" accept=".csv,.txt,.xlsx,.xls"
-                                        style="display:none;" />
+                                    <input type="file" id="file-upload-input" accept=".csv,.txt,.xlsx,.xls" style="display:none;" />
+                                    <button type="button" id="clear-btn" class="url-paste-btn btn-clear">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                        <span>Clear</span>
+                                    </button>
                                 </div>
                                 <span class="char-counter" id="char-counter">0 chars</span>
                             </div>
                         </div>
-
-                        <div id="knd-search-dropdown" class="search-dropdown hidden">
-                            <div id="knd-search-results" class="search-dropdown-list"></div>
-                        </div>
-                        <textarea id="product-urls" style="display:none;" required></textarea>
-
-                        <div id="notification-area" class="notification hidden">
-                            <i class="notification__icon fa-solid fa-circle-exclamation"></i>
-                            <span class="notification__msg" id="notification-msg"></span>
-                        </div>
-
-                        <div class="form-actions">
-                            <button type="button" id="clear-btn" class="btn btn--ghost">
-                                <i class="fa-solid fa-trash-can"></i>
-                                <span>Clear All</span>
-                            </button>
-                            <button type="submit" id="submit-btn" class="btn btn--primary">
-                                <span class="btn__text">Check Stock</span>
-                                <i class="btn__icon fa-solid fa-arrow-right"></i>
-                                <div class="btn__loader hidden" id="btn-loader"></div>
-                            </button>
-                        </div>
                     </div>
-                </form>
-            </div>
-
-            <footer class="sidebar__footer">
-                <p>Built with <i class="fa-solid fa-bolt"></i> Python & FastAPI</p>
-            </footer>
-        </aside>
-
-        <main class="main-panel" id="main-panel">
-            <div class="main-panel__header hidden" id="results-header">
-                <div class="results-header__left">
-                    <h2 class="results-header__title">
-                        <i class="fa-solid fa-chart-bar"></i>
-                        Results
-                    </h2>
-                    <span class="results-header__count" id="results-count"></span>
                 </div>
-                <div class="results-header__actions">
-                    <div class="progress-indicator hidden" id="progress-indicator">
-                        <div class="progress-bar">
-                            <div class="progress-bar__fill" id="progress-bar-fill"></div>
+                <textarea id="product-urls" style="display:none;" required></textarea>
+
+                <div id="notification-area" class="notification hidden">
+                    <i class="notification__icon fa-solid fa-circle-exclamation"></i>
+                    <span class="notification__msg" id="notification-msg"></span>
+                </div>
+            </form>
+
+            <section class="results-section">
+                <div class="results-header hidden" id="results-header">
+                    <div class="results-header__left">
+                        <h2 class="results-header__title">
+                            <i class="fa-solid fa-boxes-stacked"></i>
+                            Stock Results
+                        </h2>
+                        <span class="results-header__count" id="results-count"></span>
+                    </div>
+                    <div class="results-header__actions">
+                        <div class="progress-indicator hidden" id="progress-indicator">
+                            <div class="progress-bar">
+                                <div class="progress-bar__fill" id="progress-bar-fill"></div>
+                            </div>
+                            <span class="progress-text" id="progress-text">0 / 0</span>
                         </div>
-                        <span class="progress-text" id="progress-text">0 / 0</span>
+                        <button type="button" id="retry-failed-btn" class="btn btn--ghost btn--sm hidden" title="Retry all failed lookups">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            <span>Retry Failed</span>
+                        </button>
+                        <button type="button" id="export-csv-btn" class="btn btn--ghost btn--sm hidden" title="Export results as CSV">
+                            <i class="fa-solid fa-file-csv"></i>
+                            <span>Export CSV</span>
+                        </button>
                     </div>
-                    <button type="button" id="retry-failed-btn" class="btn btn--ghost btn--sm hidden"
-                        title="Retry all failed lookups">
-                        <i class="fa-solid fa-rotate-right"></i>
-                        <span>Retry Failed</span>
-                    </button>
-                    <button type="button" id="export-csv-btn" class="btn btn--ghost btn--sm hidden"
-                        title="Export results as CSV">
-                        <i class="fa-solid fa-file-csv"></i>
-                        <span>Export CSV</span>
-                    </button>
                 </div>
-            </div>
 
-            <div class="toolbar-bar hidden" id="results-toolbar">
-                <div class="toolbar-pills">
-                    <button type="button" class="pill-btn active" data-filter="all">All</button>
-                    <button type="button" class="pill-btn" data-filter="instock"><i
-                            class="fa-solid fa-circle-check"></i> In Stock</button>
-                    <button type="button" class="pill-btn" data-filter="outofstock"><i
-                            class="fa-solid fa-circle-xmark"></i> Out of Stock</button>
-                    <button type="button" class="pill-btn" data-filter="error"><i
-                            class="fa-solid fa-triangle-exclamation"></i> Error</button>
-                </div>
-                <div class="toolbar-controls">
-                    <div class="search-filter-box">
-                        <i class="fa-solid fa-magnifying-glass search-filter-icon"></i>
-                        <input type="text" id="results-filter-input" placeholder="Filter title..." autocomplete="off" />
+                <div class="toolbar-bar hidden" id="results-toolbar">
+                    <div class="toolbar-pills">
+                        <button type="button" class="pill-btn active" data-filter="all">All Items</button>
+                        <button type="button" class="pill-btn" data-filter="instock"><i class="fa-solid fa-circle-check"></i> In Stock</button>
+                        <button type="button" class="pill-btn" data-filter="outofstock"><i class="fa-solid fa-circle-xmark"></i> Out of Stock</button>
+                        <button type="button" class="pill-btn" data-filter="error"><i class="fa-solid fa-triangle-exclamation"></i> Error</button>
                     </div>
-                    <select id="results-sort-select" class="sort-select">
-                        <option value="default">Sort: Default</option>
-                        <option value="qty-desc">Stock: High to Low</option>
-                        <option value="qty-asc">Stock: Low to High</option>
-                        <option value="name-asc">Name: A to Z</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="main-panel__empty" id="empty-state">
-                <div class="empty-state">
-                    <div class="empty-state__icon">
-                        <i class="fa-solid fa-box-open"></i>
+                    <div class="toolbar-controls">
+                        <div class="search-filter-box">
+                            <i class="fa-solid fa-magnifying-glass search-filter-icon"></i>
+                            <input type="text" id="results-filter-input" placeholder="Filter title..." autocomplete="off" />
+                        </div>
+                        <select id="results-sort-select" class="sort-select">
+                            <option value="default">Sort: Default</option>
+                            <option value="qty-desc">Stock: High to Low</option>
+                            <option value="qty-asc">Stock: Low to High</option>
+                            <option value="name-asc">Name: A to Z</option>
+                        </select>
                     </div>
-                    <h3 class="empty-state__title">No results yet</h3>
-                    <p class="empty-state__desc">Paste product URLs <span class="loc-desktop">on the left</span><span
-                            class="loc-mobile">above</span> and hit <strong>Check Stock</strong> to see inventory data
-                        here.</p>
                 </div>
-            </div>
 
-            <div id="results-grid" class="results-grid">
-            </div>
+                <div class="empty-state-card" id="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="fa-solid fa-magnifying-glass-location"></i>
+                    </div>
+                    <h3 class="empty-state-title">Ready to Check Inventory</h3>
+                    <p class="empty-state-desc">Type a product name or paste a Karz and Dolls link above and tap <strong>Check Stock</strong>.</p>
+                </div>
+
+                <div id="results-grid" class="results-grid"></div>
+            </section>
         </main>
+
+        <footer class="app-footer">
+            <p>Built for Karz and Dolls | Live Inventory Lookup</p>
+        </footer>
     </div>
 
-    <script src="script.js?v=2"></script>
+    <script src="script.js?v=3"></script>
 </body>
 
 </html>
