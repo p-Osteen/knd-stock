@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressBarFill = document.getElementById('progress-bar-fill');
     const progressText = document.getElementById('progress-text');
 
-    let BACKEND_URL = '';
+    let BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://knd-stock.onrender.com';
 
     let resultsData = [];
     let completedCount = 0;

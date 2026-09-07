@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
-    "https://knd-stock.onrender.com,http://localhost:8000,http://127.0.0.1:8000,https://p-osteen.github.io/knd-stock"
+    "https://knd-stock.onrender.com,http://localhost:8000,http://127.0.0.1:8000,https://p-osteen.github.io/knd-stock,https://p-osteen.github.io"
 ).split(",")
 
 RATE_LIMIT = os.getenv("RATE_LIMIT", "30/minute")
