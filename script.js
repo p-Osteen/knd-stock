@@ -716,6 +716,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.stock_quantity > 0) {
                     badgeEl.textContent = 'In Stock';
                     badgeEl.className = 'badge in-stock';
+                    let buyBtn = card.querySelector('.buy-now-btn');
+                    if (!buyBtn) {
+                        buyBtn = document.createElement('a');
+                        buyBtn.className = 'buy-now-btn';
+                        buyBtn.target = '_blank';
+                        buyBtn.rel = 'noopener noreferrer';
+                        buyBtn.href = url;
+                        buyBtn.innerHTML = '<i class="fa-solid fa-cart-shopping"></i> Buy Now';
+                        card.appendChild(buyBtn);
+                    }
                 } else {
                     badgeEl.textContent = 'Out of Stock';
                     badgeEl.className = 'badge out-of-stock';
@@ -958,7 +968,186 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             }
-            next();
+    const tabBtnPaste = document.getElementById('tab-btn-paste');
+    const tabBtnSearch = document.getElementById('tab-btn-search');
+    const panelPaste = document.getElementById('panel-paste');
+    const panelSearch = document.getElementById('panel-search');
+
+    if (tabBtnPaste && tabBtnSearch) {
+        tabBtnPaste.addEventListener('click', () => switchTab('paste'));
+        tabBtnSearch.addEventListener('click', () => switchTab('search'));
+    }
+
+    function switchTab(tabName) {
+        if (tabName === 'paste') {
+            tabBtnPaste.classList.add('active');
+            tabBtnSearch.classList.remove('active');
+            panelPaste.classList.remove('hidden');
+            panelSearch.classList.add('hidden');
+        } else {
+            tabBtnSearch.classList.add('active');
+            tabBtnPaste.classList.remove('active');
+            panelSearch.classList.remove('hidden');
+            panelPaste.classList.add('hidden');
+        }
+    }
+
+    const kndSearchInput = document.getElementById('knd-search-input');
+    const kndSearchBtn = document.getElementById('knd-search-btn');
+    const kndSearchResults = document.getElementById('knd-search-results');
+    const searchBulkActions = document.getElementById('search-bulk-actions');
+    const addAllSearchBtn = document.getElementById('add-all-search-btn');
+
+    let currentSearchResults = [];
+
+    if (kndSearchBtn && kndSearchInput) {
+        kndSearchBtn.addEventListener('click', performKNDSearch);
+        kndSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') performKNDSearch();
         });
+    }
+
+    async function performKNDSearch() {
+        const term = kndSearchInput.value.trim();
+        if (!term) return;
+
+        kndSearchResults.innerHTML = `
+            <div class="search-loading">
+                <div class="loading-dots"><span></span><span></span><span></span></div>
+                <p>Searching Karz and Dolls...</p>
+            </div>
+        `;
+        if (searchBulkActions) searchBulkActions.classList.add('hidden');
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`);
+            const data = await response.json();
+
+            if (data.success && data.products && data.products.length > 0) {
+                currentSearchResults = data.products;
+                renderSearchResults(data.products);
+                if (searchBulkActions) searchBulkActions.classList.remove('hidden');
+            } else {
+                currentSearchResults = [];
+                kndSearchResults.innerHTML = `<div class="search-empty"><p>No products found for "${escapeHtml(term)}"</p></div>`;
+            }
+        } catch (err) {
+            kndSearchResults.innerHTML = `<div class="search-empty"><p>Error connecting to search API</p></div>`;
+        }
+    }
+
+    function renderSearchResults(products) {
+        kndSearchResults.innerHTML = '';
+        products.forEach((p) => {
+            const item = document.createElement('div');
+            item.className = 'search-item';
+            const imgUrl = p.image ? (p.image.startsWith('http') ? p.image : `https://www.karzanddolls.com/uploads/product_images/${p.image}`) : '';
+            const badgeClass = p.stock_quantity > 0 ? 'badge in-stock' : 'badge out-of-stock';
+            const badgeText = p.stock_quantity > 0 ? `In Stock (${p.stock_quantity})` : 'Out of Stock';
+
+            item.innerHTML = `
+                <div class="search-item__thumb">
+                    ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(p.product_name)}" />` : `<i class="fa-solid fa-box"></i>`}
+                </div>
+                <div class="search-item__info">
+                    <h4 class="search-item__name">${escapeHtml(p.product_name)}</h4>
+                    <div class="search-item__meta">
+                        <span class="search-item__price">${escapeHtml(p.price)}</span>
+                        <span class="${badgeClass}">${badgeText}</span>
+                    </div>
+                </div>
+                <button type="button" class="btn-add-search-item" title="Add to checker queue">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            `;
+
+            item.querySelector('.btn-add-search-item').addEventListener('click', () => {
+                if (p.url) {
+                    addUrls(p.url);
+                    switchTab('paste');
+                }
+            });
+
+            kndSearchResults.appendChild(item);
+        });
+    }
+
+    if (addAllSearchBtn) {
+        addAllSearchBtn.addEventListener('click', () => {
+            const urlsToAdd = currentSearchResults.map(p => p.url).filter(u => u);
+            if (urlsToAdd.length > 0) {
+                addUrls(urlsToAdd.join('\n'));
+                switchTab('paste');
+            }
+        });
+    }
+
+    const resultsToolbar = document.getElementById('results-toolbar');
+    const resultsFilterInput = document.getElementById('results-filter-input');
+    const resultsSortSelect = document.getElementById('results-sort-select');
+    const filterPills = document.querySelectorAll('.pill-btn');
+
+    let currentFilter = 'all';
+
+    filterPills.forEach(pill => {
+        pill.addEventListener('click', () => {
+            filterPills.forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            currentFilter = pill.dataset.filter;
+            applyResultsFilterAndSort();
+        });
+    });
+
+    if (resultsFilterInput) resultsFilterInput.addEventListener('input', applyResultsFilterAndSort);
+    if (resultsSortSelect) resultsSortSelect.addEventListener('change', applyResultsFilterAndSort);
+
+    function applyResultsFilterAndSort() {
+        const cards = Array.from(resultsGrid.querySelectorAll('.stock-card'));
+        const keyword = resultsFilterInput ? resultsFilterInput.value.toLowerCase().trim() : '';
+
+        cards.forEach(card => {
+            const cardId = card.id;
+            const resData = resultsData.find(r => r.cardId === cardId);
+            let matchesFilter = true;
+
+            if (currentFilter === 'instock') {
+                matchesFilter = resData && resData.success && resData.stock_quantity > 0;
+            } else if (currentFilter === 'outofstock') {
+                matchesFilter = resData && resData.success && resData.stock_quantity === 0;
+            } else if (currentFilter === 'error') {
+                matchesFilter = resData && !resData.success;
+            }
+
+            let matchesSearch = true;
+            if (keyword && resData) {
+                const textToSearch = (resData.product_name + ' ' + resData.url).toLowerCase();
+                matchesSearch = textToSearch.includes(keyword);
+            }
+
+            if (matchesFilter && matchesSearch) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        const sortVal = resultsSortSelect ? resultsSortSelect.value : 'default';
+        if (sortVal !== 'default') {
+            cards.sort((a, b) => {
+                const resA = resultsData.find(r => r.cardId === a.id) || { stock_quantity: 0, product_name: '' };
+                const resB = resultsData.find(r => r.cardId === b.id) || { stock_quantity: 0, product_name: '' };
+
+                if (sortVal === 'qty-desc') {
+                    return resB.stock_quantity - resA.stock_quantity;
+                } else if (sortVal === 'qty-asc') {
+                    return resA.stock_quantity - resB.stock_quantity;
+                } else if (sortVal === 'name-asc') {
+                    return resA.product_name.localeCompare(resB.product_name);
+                }
+                return 0;
+            });
+
+            cards.forEach(card => resultsGrid.appendChild(card));
+        }
     }
 });

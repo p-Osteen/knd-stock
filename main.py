@@ -56,6 +56,21 @@ class StockResponse(BaseModel):
     message: str = ""
 
 
+class SearchItem(BaseModel):
+    product_name: str
+    url: str
+    stock_quantity: int
+    in_stock: bool
+    price: str = ""
+    image: str = ""
+
+
+class SearchResponse(BaseModel):
+    products: list[SearchItem]
+    success: bool
+    message: str = ""
+
+
 def _is_allowed_url(url: str) -> bool:
     try:
         parsed = urlparse(url)
@@ -90,6 +105,59 @@ async def health():
 @app.get("/api/config")
 async def config():
     return {"backend_url": ""}
+
+
+@app.get("/api/search", response_model=SearchResponse)
+@limiter.limit(RATE_LIMIT)
+def search_products(request: Request, term: str = Query(..., description="Search term")):
+    if not term.strip():
+        return SearchResponse(products=[], success=True, message="Empty query")
+    try:
+        target_url = f"https://www.karzanddolls.com/search?term={term.strip()}"
+        r = session.get(target_url, headers=SESSION_HEADERS, timeout=12)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        next_data = soup.find("script", id="__NEXT_DATA__")
+        if not next_data:
+            return SearchResponse(products=[], success=False, message="Could not parse search page data.")
+        data = json.loads(next_data.string)
+        page_props = data.get("props", {}).get("pageProps", {})
+        raw_products = page_props.get("products", [])
+        items = []
+        for p in raw_products:
+            name = p.get("pro_name", "Unknown Product")
+            slug = p.get("slug", "")
+            pid = p.get("pid", "")
+            stock = p.get("pro_stock", 0)
+            if isinstance(stock, str) and stock.isdigit():
+                stock = int(stock)
+            elif not isinstance(stock, int):
+                stock = 0
+            in_s = bool(p.get("in_stock", stock > 0))
+            price_val = p.get("dis_price") or p.get("act_price") or ""
+            price_str = f"₹{price_val}" if price_val else ""
+            img_val = ""
+            imgs = p.get("prd_images")
+            if isinstance(imgs, list) and len(imgs) > 0:
+                first_img = imgs[0]
+                if isinstance(first_img, dict):
+                    img_val = str(first_img.get("pro_images") or first_img.get("image") or first_img.get("src") or "")
+                elif isinstance(first_img, str):
+                    img_val = first_img
+            elif isinstance(imgs, str):
+                img_val = imgs
+            prod_url = f"https://www.karzanddolls.com/details/{slug}?pid={pid}" if (slug and pid) else ""
+            items.append(SearchItem(
+                product_name=name,
+                url=prod_url,
+                stock_quantity=stock,
+                in_stock=in_s,
+                price=price_str,
+                image=img_val
+            ))
+        return SearchResponse(products=items, success=True, message=f"Found {len(items)} products.")
+    except Exception as e:
+        return SearchResponse(products=[], success=False, message=f"Error searching products: {str(e)}")
 
 
 @app.get("/api/check-stock", response_model=StockResponse)

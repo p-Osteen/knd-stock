@@ -63,70 +63,110 @@
                     <p class="hero__subtitle">Paste <strong>karzanddolls.com</strong> product URLs to get live stock
                         counts.</p>
                 </header>
+                <div class="sidebar-tabs">
+                    <button type="button" class="tab-btn active" id="tab-btn-paste" data-tab="paste">
+                        <i class="fa-solid fa-link"></i>
+                        <span>Paste URLs</span>
+                    </button>
+                    <button type="button" class="tab-btn" id="tab-btn-search" data-tab="search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <span>Search KND</span>
+                    </button>
+                </div>
 
-                <form id="check-form" class="stock-form" autocomplete="off">
+                <div id="panel-paste" class="tab-panel">
+                    <form id="check-form" class="stock-form" autocomplete="off">
+                        <div class="form-card">
+                            <div class="form-card__header">
+                                <div class="form-card__icon">
+                                    <i class="fa-solid fa-link"></i>
+                                </div>
+                                <div>
+                                    <h2 class="form-card__title">Product URLs</h2>
+                                    <p class="form-card__desc">One URL per line</p>
+                                </div>
+                            </div>
+
+                            <div class="url-chips-container" id="url-chips-container">
+                                <div class="url-chips-scroll" id="url-chips-scroll">
+                                    <div class="url-chips-list" id="url-chips-list" role="listbox"
+                                        aria-label="Added URLs">
+                                    </div>
+                                    <div class="url-input-row">
+                                        <input type="text" id="product-urls-input" class="url-inline-input"
+                                            placeholder="Paste or type URLs here…" spellcheck="false"
+                                            autocomplete="off" />
+                                    </div>
+                                </div>
+                                <div class="url-chips-footer">
+                                    <span class="url-counter" id="url-counter">0 URLs</span>
+                                    <div class="url-chips-footer__actions">
+                                        <button type="button" class="url-paste-btn" id="paste-btn"
+                                            title="Paste from clipboard">
+                                            <i class="fa-regular fa-clipboard"></i>
+                                            <span>Paste</span>
+                                        </button>
+                                        <button type="button" class="url-paste-btn" id="upload-btn"
+                                            title="Upload CSV, TXT, or Excel file">
+                                            <i class="fa-solid fa-file-arrow-up"></i>
+                                            <span>Upload</span>
+                                        </button>
+                                        <input type="file" id="file-upload-input" accept=".csv,.txt,.xlsx,.xls"
+                                            style="display:none;" />
+                                    </div>
+                                    <span class="char-counter" id="char-counter">0 chars</span>
+                                </div>
+                            </div>
+                            <textarea id="product-urls" style="display:none;" required></textarea>
+
+                            <div id="notification-area" class="notification hidden">
+                                <i class="notification__icon fa-solid fa-circle-exclamation"></i>
+                                <span class="notification__msg" id="notification-msg"></span>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="button" id="clear-btn" class="btn btn--ghost">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                    <span>Clear All</span>
+                                </button>
+                                <button type="submit" id="submit-btn" class="btn btn--primary">
+                                    <span class="btn__text">Check Stock</span>
+                                    <i class="btn__icon fa-solid fa-arrow-right"></i>
+                                    <div class="btn__loader hidden" id="btn-loader"></div>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="panel-search" class="tab-panel hidden">
                     <div class="form-card">
                         <div class="form-card__header">
                             <div class="form-card__icon">
-                                <i class="fa-solid fa-link"></i>
+                                <i class="fa-solid fa-magnifying-glass"></i>
                             </div>
                             <div>
-                                <h2 class="form-card__title">Product URLs</h2>
-                                <p class="form-card__desc">One URL per line</p>
+                                <h2 class="form-card__title">Search Catalog</h2>
+                                <p class="form-card__desc">Find products on Karz and Dolls</p>
                             </div>
                         </div>
-
-                        <div class="url-chips-container" id="url-chips-container">
-                            <div class="url-chips-scroll" id="url-chips-scroll">
-                                <div class="url-chips-list" id="url-chips-list" role="listbox"
-                                    aria-label="Added URLs">
-                                </div>
-                                <div class="url-input-row">
-                                    <input type="text" id="product-urls-input" class="url-inline-input"
-                                        placeholder="Paste or type URLs here…" spellcheck="false" autocomplete="off" />
-                                </div>
-                            </div>
-                            <div class="url-chips-footer">
-                                <span class="url-counter" id="url-counter">0 URLs</span>
-                                <div class="url-chips-footer__actions">
-                                    <button type="button" class="url-paste-btn" id="paste-btn"
-                                        title="Paste from clipboard">
-                                        <i class="fa-regular fa-clipboard"></i>
-                                        <span>Paste</span>
-                                    </button>
-                                    <button type="button" class="url-paste-btn" id="upload-btn"
-                                        title="Upload CSV, TXT, or Excel file">
-                                        <i class="fa-solid fa-file-arrow-up"></i>
-                                        <span>Upload</span>
-                                    </button>
-                                    <input type="file" id="file-upload-input" accept=".csv,.txt,.xlsx,.xls"
-                                        style="display:none;" />
-                                </div>
-                                <span class="char-counter" id="char-counter">0 chars</span>
-                            </div>
-                        </div>
-                        <textarea id="product-urls" style="display:none;" required></textarea>
-
-                        <div id="notification-area" class="notification hidden">
-                            <i class="notification__icon fa-solid fa-circle-info"></i>
-                            <span class="notification__text"></span>
-                        </div>
-
-                        <div class="form-actions">
-                            <button type="button" id="clear-btn" class="btn btn--ghost hidden">
-                                <i class="fa-solid fa-xmark"></i>
-                                <span>Clear</span>
+                        <div class="search-input-group">
+                            <input type="text" id="knd-search-input" class="search-input"
+                                placeholder="Type keyword (e.g. Ronin, Mustang)..." spellcheck="false"
+                                autocomplete="off" />
+                            <button type="button" id="knd-search-btn" class="btn btn--primary btn--search"
+                                title="Search">
+                                <i class="fa-solid fa-magnifying-glass"></i>
                             </button>
-                            <button type="submit" id="submit-btn" class="btn btn--primary">
-                                <span class="btn__text">Check Stock</span>
-                                <i class="fa-solid fa-arrow-right btn__icon"></i>
-                                <div class="btn__loader hidden">
-                                    <div class="btn__spinner"></div>
-                                </div>
+                        </div>
+                        <div id="knd-search-results" class="search-results-list"></div>
+                        <div id="search-bulk-actions" class="search-bulk-actions hidden">
+                            <button type="button" id="add-all-search-btn" class="btn btn--secondary btn--sm">
+                                <i class="fa-solid fa-plus"></i> Add All Results to Queue
                             </button>
                         </div>
                     </div>
-                </form>
+                </div>
             </div>
 
             <footer class="sidebar__footer">
@@ -163,13 +203,39 @@
                 </div>
             </div>
 
+            <div class="toolbar-bar hidden" id="results-toolbar">
+                <div class="toolbar-pills">
+                    <button type="button" class="pill-btn active" data-filter="all">All</button>
+                    <button type="button" class="pill-btn" data-filter="instock"><i
+                            class="fa-solid fa-circle-check"></i> In Stock</button>
+                    <button type="button" class="pill-btn" data-filter="outofstock"><i
+                            class="fa-solid fa-circle-xmark"></i> Out of Stock</button>
+                    <button type="button" class="pill-btn" data-filter="error"><i
+                            class="fa-solid fa-triangle-exclamation"></i> Error</button>
+                </div>
+                <div class="toolbar-controls">
+                    <div class="search-filter-box">
+                        <i class="fa-solid fa-magnifying-glass search-filter-icon"></i>
+                        <input type="text" id="results-filter-input" placeholder="Filter title..." autocomplete="off" />
+                    </div>
+                    <select id="results-sort-select" class="sort-select">
+                        <option value="default">Sort: Default</option>
+                        <option value="qty-desc">Stock: High to Low</option>
+                        <option value="qty-asc">Stock: Low to High</option>
+                        <option value="name-asc">Name: A to Z</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="main-panel__empty" id="empty-state">
                 <div class="empty-state">
                     <div class="empty-state__icon">
                         <i class="fa-solid fa-box-open"></i>
                     </div>
                     <h3 class="empty-state__title">No results yet</h3>
-                    <p class="empty-state__desc">Paste product URLs <span class="loc-desktop">on the left</span><span class="loc-mobile">above</span> and hit <strong>Check Stock</strong> to see inventory data here.</p>
+                    <p class="empty-state__desc">Paste product URLs <span class="loc-desktop">on the left</span><span
+                            class="loc-mobile">above</span> and hit <strong>Check Stock</strong> to see inventory data
+                        here.</p>
                 </div>
             </div>
 
