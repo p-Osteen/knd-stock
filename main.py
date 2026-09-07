@@ -160,6 +160,20 @@ def search_products(request: Request, term: str = Query(..., description="Search
         return SearchResponse(products=[], success=False, message=f"Error searching products: {str(e)}")
 
 
+def _extract_title_from_url(url: str) -> str:
+    try:
+        path = urlparse(url).path.strip("/")
+        parts = [p for p in path.split("/") if p]
+        if parts:
+            slug = parts[-1]
+            title = slug.replace("-", " ").strip().title()
+            if title:
+                return title
+    except Exception:
+        pass
+    return "Out of Stock Product"
+
+
 @app.get("/api/check-stock", response_model=StockResponse)
 @limiter.limit(RATE_LIMIT)
 def check_stock(request: Request, url: str = Query(..., description="The product URL to check")):
@@ -171,6 +185,14 @@ def check_stock(request: Request, url: str = Query(..., description="The product
 
     try:
         r = session.get(url, headers=SESSION_HEADERS, timeout=12)
+        if r.status_code == 404:
+            derived_title = _extract_title_from_url(url)
+            return StockResponse(
+                product_name=derived_title,
+                stock_quantity=0,
+                success=True,
+                message="Out of Stock (Page 404)",
+            )
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
         next_data = soup.find("script", id="__NEXT_DATA__")
@@ -205,6 +227,14 @@ def check_stock(request: Request, url: str = Query(..., description="The product
                 message="Could not find stock info in the page.",
             )
     except Exception as e:
+        if "404" in str(e):
+            derived_title = _extract_title_from_url(url)
+            return StockResponse(
+                product_name=derived_title,
+                stock_quantity=0,
+                success=True,
+                message="Out of Stock (Page 404)",
+            )
         return StockResponse(
             product_name="Unknown",
             stock_quantity=0,

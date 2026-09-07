@@ -713,22 +713,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 animateValue(qtyEl, 0, data.stock_quantity, 900);
 
+                let actionBtn = card.querySelector('.card-action-btn');
+                if (!actionBtn) {
+                    actionBtn = document.createElement('a');
+                    actionBtn.target = '_blank';
+                    actionBtn.rel = 'noopener noreferrer';
+                    actionBtn.href = url;
+                    card.appendChild(actionBtn);
+                }
+
                 if (data.stock_quantity > 0) {
                     badgeEl.textContent = 'In Stock';
                     badgeEl.className = 'badge in-stock';
-                    let buyBtn = card.querySelector('.buy-now-btn');
-                    if (!buyBtn) {
-                        buyBtn = document.createElement('a');
-                        buyBtn.className = 'buy-now-btn';
-                        buyBtn.target = '_blank';
-                        buyBtn.rel = 'noopener noreferrer';
-                        buyBtn.href = url;
-                        buyBtn.innerHTML = '<i class="fa-solid fa-cart-shopping"></i> Buy Now';
-                        card.appendChild(buyBtn);
-                    }
+                    actionBtn.className = 'card-action-btn buy-now-btn';
+                    actionBtn.innerHTML = '<i class="fa-solid fa-cart-shopping"></i> Buy Now';
                 } else {
                     badgeEl.textContent = 'Out of Stock';
                     badgeEl.className = 'badge out-of-stock';
+                    actionBtn.className = 'card-action-btn view-page-btn';
+                    actionBtn.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square"></i> View Page';
                 }
 
                 resultsData.push({
@@ -783,12 +786,7 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'card';
         card.id = id;
         card.style.animationDelay = `${Math.min(index, 40) * 0.08}s`;
-        card.style.cursor = 'pointer';
         card.setAttribute('data-url', url);
-        card.addEventListener('click', (e) => {
-            if (e.target.closest('.card-retry-btn')) return;
-            window.open(url, '_blank');
-        });
 
         const shortUrl = url.length > 55 ? url.substring(0, 55) + '…' : url;
 
