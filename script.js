@@ -968,6 +968,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             }
+            next();
+        });
+    }
     const tabBtnPaste = document.getElementById('tab-btn-paste');
     const tabBtnSearch = document.getElementById('tab-btn-search');
     const panelPaste = document.getElementById('panel-paste');
