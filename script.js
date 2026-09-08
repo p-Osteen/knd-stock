@@ -113,17 +113,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let searchIdCounter = 0;
 
+    function showSearchLoading() {
+        searchResultsList.innerHTML = `
+            <div class="search-loading">
+                <div class="search-loading-spinner"></div>
+                <span>Searching products…</span>
+            </div>
+        `;
+        searchDropdown.classList.remove('hidden');
+    }
+
     async function performLiveSearch(term) {
         const thisSearchId = ++searchIdCounter;
+        showSearchLoading();
         try {
             const res = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`);
-            if (thisSearchId !== searchIdCounter) return; // stale response, discard
+            if (thisSearchId !== searchIdCounter) return;
             const data = await res.json();
             if (thisSearchId !== searchIdCounter) return;
             if (data.success && data.products && data.products.length > 0) {
                 renderSearchDropdown(data.products);
             } else {
-                hideSearchDropdown();
+                searchResultsList.innerHTML = `
+                    <div class="search-loading">
+                        <span>No products found</span>
+                    </div>
+                `;
             }
         } catch {
             if (thisSearchId === searchIdCounter) hideSearchDropdown();
@@ -345,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
         totalCount = urls.length;
 
         resultsHeader.classList.remove('hidden');
-        resultsToolbar.classList.remove('hidden');
+        if (resultsToolbar) resultsToolbar.classList.remove('hidden');
         progressIndicator.classList.remove('hidden');
         updateProgress();
 
