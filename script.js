@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         searchTimer = setTimeout(() => {
             performLiveSearch(val);
-        }, 300);
+        }, 150);
     });
 
     document.addEventListener('click', (e) => {
