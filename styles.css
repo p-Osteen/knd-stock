@@ -390,6 +390,21 @@ body {
     font-size: 0.85rem;
     font-weight: 700;
     flex-shrink: 0;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.search-item-action.added {
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid var(--success-border);
+}
+
+.search-item.selected {
+    background: rgba(124, 100, 255, 0.08);
+    border-left: 3px solid var(--accent-start);
 }
 
 .batch-toggle-bar {

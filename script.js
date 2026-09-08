@@ -111,29 +111,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    let searchIdCounter = 0;
+
     async function performLiveSearch(term) {
+        const thisSearchId = ++searchIdCounter;
         try {
             const res = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`);
+            if (thisSearchId !== searchIdCounter) return; // stale response, discard
             const data = await res.json();
+            if (thisSearchId !== searchIdCounter) return;
             if (data.success && data.products && data.products.length > 0) {
                 renderSearchDropdown(data.products);
             } else {
                 hideSearchDropdown();
             }
         } catch {
-            hideSearchDropdown();
+            if (thisSearchId === searchIdCounter) hideSearchDropdown();
         }
     }
 
     function renderSearchDropdown(products) {
         searchResultsList.innerHTML = '';
-        products.slice(0, 6).forEach(p => {
+        products.slice(0, 8).forEach(p => {
             const item = document.createElement('div');
-            item.className = 'search-item';
+            const isSelected = p.url && urls.includes(p.url);
+            item.className = 'search-item' + (isSelected ? ' selected' : '');
             
             const imgHtml = p.image ? `<img src="${escapeHtml(p.image)}" class="search-item-img" alt="" />` : `<div class="search-item-img" style="display:flex;align-items:center;justify-content:center;"><i class="fa-solid fa-car"></i></div>`;
             const stockClass = p.in_stock ? 'in-stock' : 'out-stock';
             const stockText = p.in_stock ? `In Stock (${p.stock_quantity})` : 'Out of Stock';
+
+            const actionText = isSelected ? '<i class="fa-solid fa-circle-check"></i> Added' : '<i class="fa-solid fa-plus"></i> Add';
 
             item.innerHTML = `
                 ${imgHtml}
@@ -144,16 +152,27 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="search-item-stock ${stockClass}">${stockText}</span>
                     </div>
                 </div>
-                <div class="search-item-action">Check Stock</div>
+                <div class="search-item-action ${isSelected ? 'added' : ''}">${actionText}</div>
             `;
 
-            item.addEventListener('click', () => {
-                superInput.value = p.url || p.product_name;
-                hideSearchDropdown();
-                if (p.url && isKndUrl(p.url)) {
-                    addUrls(p.url);
-                    startBatchCheck();
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!p.url || !isKndUrl(p.url)) return;
+
+                const idx = urls.indexOf(p.url);
+                if (idx > -1) {
+                    urls.splice(idx, 1);
+                    item.classList.remove('selected');
+                    item.querySelector('.search-item-action').innerHTML = '<i class="fa-solid fa-plus"></i> Add';
+                    item.querySelector('.search-item-action').classList.remove('added');
+                } else {
+                    urls.push(p.url);
+                    item.classList.add('selected');
+                    item.querySelector('.search-item-action').innerHTML = '<i class="fa-solid fa-circle-check"></i> Added';
+                    item.querySelector('.search-item-action').classList.add('added');
                 }
+                renderChips();
+                updateCounters();
             });
 
             searchResultsList.appendChild(item);
