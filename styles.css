@@ -29,6 +29,7 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
 html {
@@ -116,6 +117,9 @@ body {
     max-width: 1200px;
     margin: 0 auto;
     padding: 1.5rem 2rem 3rem;
+    padding-left: max(2rem, env(safe-area-inset-left));
+    padding-right: max(2rem, env(safe-area-inset-right));
+    padding-bottom: max(3rem, env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
@@ -244,10 +248,13 @@ body {
     border-radius: var(--radius-md);
     padding: 0 1.1rem 0 3.25rem;
     color: #ffffff;
-    font-size: 1.05rem;
+    font-size: 16px;
     font-family: var(--font);
     outline: none;
     transition: all 0.2s ease;
+    -webkit-appearance: none;
+    appearance: none;
+    touch-action: manipulation;
 }
 
 .super-input:focus {
@@ -274,6 +281,9 @@ body {
     box-shadow: 0 4px 20px rgba(124, 100, 255, 0.35);
     transition: all 0.2s ease;
     flex-shrink: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    touch-action: manipulation;
 }
 
 .super-btn:hover {
@@ -314,6 +324,7 @@ body {
 .search-dropdown-list {
     max-height: 380px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .search-item {
@@ -457,6 +468,7 @@ body {
 .url-chips-scroll {
     max-height: 180px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .url-chips-list {

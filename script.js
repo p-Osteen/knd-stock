@@ -138,8 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
             item.className = 'search-item' + (isSelected ? ' selected' : '');
             
             const imgHtml = p.image ? `<img src="${escapeHtml(p.image)}" class="search-item-img" alt="" />` : `<div class="search-item-img" style="display:flex;align-items:center;justify-content:center;"><i class="fa-solid fa-car"></i></div>`;
-            const stockClass = p.in_stock ? 'in-stock' : 'out-stock';
-            const stockText = p.in_stock ? `In Stock (${p.stock_quantity})` : 'Out of Stock';
 
             const actionText = isSelected ? '<i class="fa-solid fa-circle-check"></i> Added' : '<i class="fa-solid fa-plus"></i> Add';
 
@@ -149,7 +147,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="search-item-title">${escapeHtml(p.product_name)}</div>
                     <div class="search-item-meta">
                         ${p.price ? `<span class="search-item-price">${escapeHtml(p.price)}</span>` : ''}
-                        <span class="search-item-stock ${stockClass}">${stockText}</span>
                     </div>
                 </div>
                 <div class="search-item-action ${isSelected ? 'added' : ''}">${actionText}</div>
