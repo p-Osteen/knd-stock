@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>KND Stock Checker — Live Inventory Lookup</title>
+    <meta name="description"
+        content="Check live product stock counts on Karz and Dolls instantly. Search product names or paste links.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/fontawesome.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/solid.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/regular.min.css">
+    <link rel="stylesheet" href="styles.css?v=4">
+</head>
+
+<body>
+    <div class="bg-mesh" aria-hidden="true">
+        <div class="mesh-orb mesh-orb--1"></div>
+        <div class="mesh-orb mesh-orb--2"></div>
+        <div class="mesh-orb mesh-orb--3"></div>
+        <div class="mesh-grid"></div>
+        <div class="mesh-grain"></div>
+    </div>
+
+    <div class="app-layout">
+        <header class="app-header">
+            <div class="header-main">
+                <div class="header-brand">
+                    <div class="header-logo">
+                        <i class="fa-solid fa-car-side"></i>
+                    </div>
+                    <div class="header-brand-text">
+                        <div class="brand-badge-row">
+                            <span class="brand-tag">DIECAST COLLECTOR TOOL</span>
+                            <div class="header-status-badge">
+                                <span class="status-pulse-dot"></span>
+                                <span class="status-label">Live Karz &amp; Dolls Engine</span>
+                            </div>
+                        </div>
+                        <h1 class="header-title">KND Stock Checker</h1>
+                    </div>
+                </div>
+
+                <div class="header-quick-stats" id="header-quick-stats">
+                    <div class="header-stat-pill">
+                        <i class="fa-solid fa-bolt text-accent"></i>
+                        <span>Instant Lookup</span>
+                    </div>
+                    <div class="header-stat-pill">
+                        <i class="fa-solid fa-box-archive text-emerald"></i>
+                        <span>Live Stock Counts</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <form id="check-form" class="super-form" autocomplete="off">
+                <div class="super-bar-card">
+                    <div class="super-bar-row">
+                        <div class="super-input-wrapper">
+                            <i class="fa-solid fa-magnifying-glass super-search-icon"></i>
+                            <input type="text" id="product-urls-input" class="super-input"
+                                placeholder="Search product name (e.g. Ronin, Skyline, Kaido) or paste Karz &amp; Dolls link…"
+                                spellcheck="false" autocomplete="off" />
+                            <kbd class="input-kbd-hint">↵ Check</kbd>
+                            <div id="knd-search-dropdown" class="search-dropdown hidden">
+                                <div id="knd-search-results" class="search-dropdown-list"></div>
+                            </div>
+                        </div>
+                        <button type="submit" id="submit-btn" class="super-btn">
+                            <span class="btn__text">Check Stock</span>
+                            <i class="fa-solid fa-bolt btn__icon"></i>
+                            <div class="btn__loader hidden" id="btn-loader"></div>
+                        </button>
+                    </div>
+
+                    <div class="batch-action-bar">
+                        <div class="batch-action-bar__left">
+                            <button type="button" id="toggle-batch-btn" class="batch-toggle-btn">
+                                <i class="fa-solid fa-layer-group"></i>
+                                <span id="batch-toggle-text">Multiple links queued (0)</span>
+                                <i class="fa-solid fa-chevron-down chevron-icon" id="batch-chevron"></i>
+                            </button>
+                        </div>
+                        <div class="batch-action-bar__right">
+                            <button type="button" class="mini-tool-btn" id="paste-btn"
+                                title="Paste link from clipboard">
+                                <i class="fa-regular fa-clipboard"></i>
+                                <span>Paste Link</span>
+                            </button>
+                            <button type="button" class="mini-tool-btn" id="upload-btn"
+                                title="Upload CSV, TXT, or Excel list">
+                                <i class="fa-solid fa-file-arrow-up"></i>
+                                <span>Upload File</span>
+                            </button>
+                            <input type="file" id="file-upload-input" accept=".csv,.txt,.xlsx,.xls"
+                                style="display:none;" />
+                            <button type="button" id="clear-btn" class="mini-tool-btn mini-tool-btn--danger"
+                                title="Clear all queued links">
+                                <i class="fa-solid fa-trash-can"></i>
+                                <span>Clear</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="batch-panel" class="batch-panel hidden">
+                        <div class="url-chips-container" id="url-chips-container">
+                            <div class="url-chips-scroll" id="url-chips-scroll">
+                                <div class="url-chips-list" id="url-chips-list" role="listbox" aria-label="Added URLs">
+                                </div>
+                            </div>
+                            <div class="url-chips-footer">
+                                <span class="url-counter" id="url-counter">0 Links Queued</span>
+                                <span class="char-counter" id="char-counter">0 chars</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <textarea id="product-urls" style="display:none;"></textarea>
+
+                <div id="notification-area" class="notification hidden">
+                    <i class="notification__icon fa-solid fa-circle-exclamation"></i>
+                    <span class="notification__msg" id="notification-msg"></span>
+                </div>
+            </form>
+
+            <section class="results-section">
+
+                <div class="results-header hidden" id="results-header">
+                    <div class="results-header__left">
+                        <h2 class="results-header__title">
+                            <i class="fa-solid fa-layer-group"></i>
+                            Stock Results
+                        </h2>
+                        <span class="results-header__count" id="results-count"></span>
+                    </div>
+                    <div class="results-header__actions">
+                        <div class="progress-indicator hidden" id="progress-indicator">
+                            <div class="progress-bar">
+                                <div class="progress-bar__fill" id="progress-bar-fill"></div>
+                            </div>
+                            <span class="progress-text" id="progress-text">0 / 0</span>
+                        </div>
+                        <button type="button" id="retry-failed-btn" class="action-btn action-btn--danger hidden"
+                            title="Retry failed lookups">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            <span id="retry-failed-text">Retry Failed</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="toolbar-bar hidden" id="results-toolbar">
+                    <div class="toolbar-pills">
+                        <button type="button" class="pill-btn active" data-filter="all">
+                            <span>All</span> <span class="pill-badge" id="count-all">0</span>
+                        </button>
+                        <button type="button" class="pill-btn pill-btn--success" data-filter="instock">
+                            <i class="fa-solid fa-circle-check"></i> <span>In Stock</span> <span class="pill-badge"
+                                id="count-instock">0</span>
+                        </button>
+                        <button type="button" class="pill-btn pill-btn--ruby" data-filter="outofstock">
+                            <i class="fa-solid fa-circle-xmark"></i> <span>Out of Stock</span> <span class="pill-badge"
+                                id="count-outofstock">0</span>
+                        </button>
+                        <button type="button" class="pill-btn pill-btn--error" data-filter="error">
+                            <i class="fa-solid fa-triangle-exclamation"></i> <span>Failed</span> <span
+                                class="pill-badge" id="count-failed">0</span>
+                        </button>
+                    </div>
+                    <div class="toolbar-controls">
+                        <div class="search-filter-box">
+                            <i class="fa-solid fa-magnifying-glass search-filter-icon"></i>
+                            <input type="text" id="results-filter-input" placeholder="Filter loaded items..."
+                                autocomplete="off" />
+                        </div>
+                        <select id="results-sort-select" class="sort-select">
+                            <option value="default">Sort: Default</option>
+                            <option value="qty-desc">Stock: High to Low</option>
+                            <option value="qty-asc">Stock: Low to High</option>
+                            <option value="name-asc">Name: A to Z</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="empty-state-card" id="empty-state">
+                    <div class="empty-state-orb">
+                        <i class="fa-solid fa-car"></i>
+                    </div>
+                    <h3 class="empty-state-title">Ready for Live Inventory Lookup</h3>
+                    <p class="empty-state-desc">Type any diecast model name, paste multiple Karz &amp; Dolls product
+                        links, or upload an export list to check live stock counts instantly.</p>
+                    <div class="empty-state-shortcuts">
+                        <div class="shortcut-chip"><i class="fa-solid fa-clipboard-check"></i> Paste multi-line links
+                        </div>
+                        <div class="shortcut-chip"><i class="fa-solid fa-bolt"></i> Auto live search</div>
+                        <div class="shortcut-chip"><i class="fa-solid fa-boxes-stacked"></i> Live inventory tracker
+                        </div>
+                    </div>
+                </div>
+
+                <div id="results-grid" class="results-grid"></div>
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p>Built for Karz and Dolls &bull; Live Inventory Engine &bull; Fast Diecast Lookups</p>
+        </footer>
+    </div>
+
+    <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+    <script src="script.js?v=4"></script>
+</body>
+
+</html>
