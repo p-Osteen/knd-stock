@@ -115,8 +115,8 @@ async def config():
     return {"backend_url": ""}
 
 
-DEFAULT_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "22"))
-MAX_RETRIES = int(os.getenv("MAX_RETRIES", "2"))
+DEFAULT_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "15"))
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "1"))
 
 
 def _clean_error_message(err: Exception) -> str:
@@ -169,8 +169,8 @@ def search_products(request: Request, term: str = Query(..., description="Search
         if not next_data:
             return SearchResponse(products=[], success=False, message="Could not parse search page data.")
         data = json.loads(next_data.string)
-        page_props = data.get("props", {}).get("pageProps", {})
-        raw_products = page_props.get("products", [])
+        page_props = (data.get("props") or {}).get("pageProps") or {}
+        raw_products = page_props.get("products") or []
         items = []
         for p in raw_products:
             name = p.get("pro_name", "Unknown Product")
@@ -261,11 +261,17 @@ def check_stock(request: Request, url: str = Query(..., description="The product
 
         if next_data:
             data = json.loads(next_data.string)
-            product_details = (
-                data.get("props", {})
-                .get("pageProps", {})
-                .get("productdetails", {})
-            )
+            props = data.get("props") or {}
+            page_props = props.get("pageProps") or {}
+            product_details = page_props.get("productdetails") or {}
+
+            if not product_details:
+                return StockResponse(
+                    product_name=derived_title,
+                    stock_quantity=0,
+                    success=False,
+                    message="Product details not found in page data.",
+                )
 
             pro_name = product_details.get("pro_name") or derived_title
             pro_stock = product_details.get("pro_stock", 0)
