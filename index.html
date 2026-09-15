@@ -26,6 +26,50 @@
         <div class="mesh-grain"></div>
     </div>
 
+    <!-- Authentication Gate Modal -->
+    <div id="auth-gate-modal" class="auth-gate-overlay hidden">
+        <div class="auth-gate-card">
+            <div class="login-badge">
+                <i class="fa-solid fa-lock"></i>
+                <span>Protected System</span>
+            </div>
+
+            <div class="login-icon-bubble">
+                <i class="fa-solid fa-car-side"></i>
+            </div>
+
+            <h2 class="login-title">KND Stock Checker</h2>
+            <p class="login-desc">Enter the system access password to unlock live inventory lookup.</p>
+
+            <form id="gate-login-form" class="login-form" autocomplete="off">
+                <div class="login-error" id="gate-error" role="alert">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span id="gate-error-msg">Incorrect password. Please try again.</span>
+                </div>
+
+                <div class="login-input-group">
+                    <input type="password" id="gate-password-input" class="login-input"
+                        placeholder="Enter password" autocomplete="current-password" required />
+                    <i class="fa-solid fa-key login-input-icon"></i>
+                    <button type="button" class="login-toggle-eye" id="gate-toggle-pw-btn" aria-label="Toggle password visibility">
+                        <i class="fa-solid fa-eye" id="gate-toggle-pw-icon"></i>
+                    </button>
+                </div>
+
+                <button type="submit" class="login-submit-btn" id="gate-submit-btn">
+                    <span id="gate-btn-text">Unlock Access</span>
+                    <i class="fa-solid fa-arrow-right" id="gate-btn-icon"></i>
+                    <div class="login-btn-spinner" id="gate-btn-spinner" style="display: none;"></div>
+                </button>
+            </form>
+
+            <div class="login-footer-hint">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>7-day authenticated access session</span>
+            </div>
+        </div>
+    </div>
+
     <div class="app-layout">
         <header class="app-header">
             <div class="header-main">

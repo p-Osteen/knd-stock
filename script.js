@@ -96,15 +96,162 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', async () => {
+    const authGateModal = document.getElementById('auth-gate-modal');
+    const gateForm = document.getElementById('gate-login-form');
+    const gateInput = document.getElementById('gate-password-input');
+    const gateToggleBtn = document.getElementById('gate-toggle-pw-btn');
+    const gateToggleIcon = document.getElementById('gate-toggle-pw-icon');
+    const gateSubmitBtn = document.getElementById('gate-submit-btn');
+    const gateBtnText = document.getElementById('gate-btn-text');
+    const gateBtnIcon = document.getElementById('gate-btn-icon');
+    const gateBtnSpinner = document.getElementById('gate-btn-spinner');
+    const gateError = document.getElementById('gate-error');
+    const gateErrorMsg = document.getElementById('gate-error-msg');
+    const lockBtnText = document.getElementById('lock-btn-text');
+
+    function getAuthToken() {
+        return localStorage.getItem('knd_session_token') || '';
+    }
+
+    function setAuthToken(token) {
+        if (token) {
+            localStorage.setItem('knd_session_token', token);
+        } else {
+            localStorage.removeItem('knd_session_token');
+        }
+        updateLockBtnState();
+    }
+
+    function getAuthHeaders(extraHeaders = {}) {
+        const token = getAuthToken();
+        const headers = { ...extraHeaders };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
+    }
+
+    function updateLockBtnState() {
+        if (!logoutBtn) return;
+        const token = getAuthToken();
+        if (token) {
+            logoutBtn.title = "Lock session";
+            if (lockBtnText) lockBtnText.textContent = "Lock";
+        } else {
+            logoutBtn.title = "Unlock session";
+            if (lockBtnText) lockBtnText.textContent = "Unlock";
+        }
+    }
+
+    function showAuthGate() {
+        if (authGateModal) {
+            authGateModal.classList.remove('hidden');
+            if (gateError) gateError.classList.remove('visible');
+            if (gateInput) {
+                gateInput.value = '';
+                setTimeout(() => gateInput.focus(), 100);
+            }
+        }
+        updateLockBtnState();
+    }
+
+    function hideAuthGate() {
+        if (authGateModal) {
+            authGateModal.classList.add('hidden');
+        }
+        updateLockBtnState();
+    }
+
+    // Check on startup
+    if (!getAuthToken()) {
+        showAuthGate();
+    } else {
+        updateLockBtnState();
+    }
+
+    if (gateToggleBtn && gateInput) {
+        gateToggleBtn.addEventListener('click', () => {
+            const isPw = gateInput.type === 'password';
+            gateInput.type = isPw ? 'text' : 'password';
+            gateToggleIcon.className = isPw ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+            gateInput.focus();
+        });
+    }
+
+    if (gateForm) {
+        gateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = (gateInput.value || '').trim();
+            if (!password) return;
+
+            gateError.classList.remove('visible');
+            gateSubmitBtn.disabled = true;
+            gateBtnText.textContent = 'Verifying…';
+            gateBtnIcon.style.display = 'none';
+            gateBtnSpinner.style.display = 'block';
+
             try {
-                await fetch(`${BACKEND_URL}/api/logout`, {
+                const res = await fetch(`${BACKEND_URL}/api/login`, {
                     method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password }),
                     credentials: 'include'
                 });
-            } catch { }
-            window.location.reload();
+
+                const data = await res.json().catch(() => ({}));
+
+                if (res.ok && data.success) {
+                    setAuthToken(data.token);
+                    gateBtnText.textContent = 'Access Granted!';
+                    gateBtnSpinner.style.display = 'none';
+                    gateBtnIcon.className = 'fa-solid fa-circle-check';
+                    gateBtnIcon.style.display = 'inline-block';
+                    gateSubmitBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+
+                    setTimeout(() => {
+                        hideAuthGate();
+                        gateSubmitBtn.disabled = false;
+                        gateBtnText.textContent = 'Unlock Access';
+                        gateBtnIcon.className = 'fa-solid fa-arrow-right';
+                        gateSubmitBtn.style.background = '';
+                        showToast('Session unlocked (7 days)', 'success');
+                    }, 400);
+                } else {
+                    gateErrorMsg.textContent = data.message || 'Incorrect password. Please try again.';
+                    gateError.classList.add('visible');
+                    gateSubmitBtn.disabled = false;
+                    gateBtnText.textContent = 'Unlock Access';
+                    gateBtnIcon.style.display = 'inline-block';
+                    gateBtnSpinner.style.display = 'none';
+                    gateInput.select();
+                }
+            } catch (err) {
+                gateErrorMsg.textContent = 'Network error: could not connect to server.';
+                gateError.classList.add('visible');
+                gateSubmitBtn.disabled = false;
+                gateBtnText.textContent = 'Unlock Access';
+                gateBtnIcon.style.display = 'inline-block';
+                gateBtnSpinner.style.display = 'none';
+            }
+        });
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            if (getAuthToken()) {
+                try {
+                    await fetch(`${BACKEND_URL}/api/logout`, {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: getAuthHeaders()
+                    });
+                } catch { }
+                setAuthToken('');
+                showToast('Session locked', 'info');
+                showAuthGate();
+            } else {
+                showAuthGate();
+            }
         });
     }
 
@@ -173,10 +320,12 @@ document.addEventListener('DOMContentLoaded', () => {
         showSearchLoading();
         try {
             const res = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`, {
-                credentials: 'include'
+                credentials: 'include',
+                headers: getAuthHeaders()
             });
             if (res.status === 401) {
-                window.location.reload();
+                setAuthToken('');
+                showAuthGate();
                 return;
             }
             if (thisSearchId !== searchIdCounter) return;
@@ -530,10 +679,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let attempt = 0; attempt < 2; attempt++) {
                     try {
                         const res = await fetch(`${BACKEND_URL}/api/check-stock?url=${encodeURIComponent(targetUrl)}`, {
-                            credentials: 'include'
+                            credentials: 'include',
+                            headers: getAuthHeaders()
                         });
                         if (res.status === 401) {
-                            window.location.reload();
+                            setAuthToken('');
+                            showAuthGate();
                             return;
                         }
                         if (!res.ok) {

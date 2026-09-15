@@ -81,8 +81,18 @@ def is_valid_session(token: str | None) -> bool:
         return False
 
 
+def get_session_token(request: Request) -> str | None:
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header[7:].strip()
+    custom_header = request.headers.get("X-Session-Token")
+    if custom_header:
+        return custom_header.strip()
+    return request.cookies.get(SESSION_COOKIE_NAME)
+
+
 def check_authenticated(request: Request) -> bool:
-    token = request.cookies.get(SESSION_COOKIE_NAME)
+    token = get_session_token(request)
     return is_valid_session(token)
 
 
@@ -151,9 +161,7 @@ async def serve_login():
 
 
 @app.get("/script.js")
-async def serve_script(request: Request):
-    if not check_authenticated(request):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+async def serve_script():
     return FileResponse("script.js", media_type="application/javascript")
 
 
@@ -171,14 +179,19 @@ def login(req: LoginRequest, request: Request):
         )
     if req.password == APP_PASSWORD:
         token = create_session_token()
-        response = JSONResponse(content={"success": True, "message": "Authenticated"})
+        response = JSONResponse(content={
+            "success": True,
+            "message": "Authenticated",
+            "token": token,
+            "expires_in": SESSION_MAX_AGE
+        })
         is_secure = request.url.scheme == "https" or "render.com" in request.headers.get("host", "")
         response.set_cookie(
             key=SESSION_COOKIE_NAME,
             value=token,
             max_age=SESSION_MAX_AGE,
             httponly=True,
-            samesite="lax",
+            samesite="none" if is_secure else "lax",
             secure=is_secure,
             path="/"
         )
