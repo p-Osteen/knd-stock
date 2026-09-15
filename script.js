@@ -146,10 +146,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function showAuthGate() {
         if (authGateModal) {
             authGateModal.classList.remove('hidden');
+            authGateModal.style.display = 'flex';
             if (gateError) gateError.classList.remove('visible');
             if (gateInput) {
                 gateInput.value = '';
-                setTimeout(() => gateInput.focus(), 100);
+                setTimeout(() => gateInput.focus(), 150);
             }
         }
         updateLockBtnState();
@@ -158,6 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideAuthGate() {
         if (authGateModal) {
             authGateModal.classList.add('hidden');
+            authGateModal.style.display = 'none';
         }
         updateLockBtnState();
     }
@@ -324,7 +326,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: getAuthHeaders()
             });
             if (res.status === 401) {
+                hideSearchDropdown();
                 setAuthToken('');
+                showToast('Authentication required (401). Please enter password.', 'error');
                 showAuthGate();
                 return;
             }
@@ -601,7 +605,17 @@ document.addEventListener('DOMContentLoaded', () => {
     async function performLiveSearchAndCheckFirst(term) {
         setLoading(true);
         try {
-            const res = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`);
+            const res = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`, {
+                credentials: 'include',
+                headers: getAuthHeaders()
+            });
+            if (res.status === 401) {
+                hideSearchDropdown();
+                setAuthToken('');
+                showToast('Authentication required (401). Please enter password.', 'error');
+                showAuthGate();
+                return;
+            }
             const data = await res.json();
             if (data.success && data.products && data.products.length > 0) {
                 const first = data.products[0];
@@ -683,8 +697,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             headers: getAuthHeaders()
                         });
                         if (res.status === 401) {
+                            hideSearchDropdown();
                             setAuthToken('');
+                            showToast('Authentication required (401). Please enter password.', 'error');
                             showAuthGate();
+                            setLoading(false);
                             return;
                         }
                         if (!res.ok) {
