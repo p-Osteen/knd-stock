@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import os
 import time
@@ -37,9 +39,55 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
     allow_credentials=True,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+if os.path.exists(".env"):
+    try:
+        with open(".env", "r", encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+    except Exception:
+        pass
+
+APP_PASSWORD = os.getenv("APP_PASSWORD")
+SESSION_SECRET = os.getenv("SESSION_SECRET", "knd-stock-auth-secret-key-v1-production")
+SESSION_MAX_AGE = 7 * 24 * 60 * 60  # 7 days in seconds
+SESSION_COOKIE_NAME = "knd_session"
+
+
+def create_session_token() -> str:
+    expires_at = int(time.time()) + SESSION_MAX_AGE
+    payload = f"{expires_at}"
+    sig = hmac.new(SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+
+def is_valid_session(token: str | None) -> bool:
+    if not token or ":" not in token:
+        return False
+    try:
+        payload, sig = token.split(":", 1)
+        expires_at = int(payload)
+        if time.time() > expires_at:
+            return False
+        expected_sig = hmac.new(SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(sig, expected_sig)
+    except Exception:
+        return False
+
+
+def check_authenticated(request: Request) -> bool:
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    return is_valid_session(token)
+
+
+class LoginRequest(BaseModel):
+    password: str
 
 session = requests.Session(impersonate="chrome120")
 SESSION_HEADERS = {
@@ -91,18 +139,63 @@ def _is_allowed_url(url: str) -> bool:
 
 
 @app.get("/")
-async def root():
-    return FileResponse("index.html")
+async def root(request: Request):
+    if check_authenticated(request):
+        return FileResponse("index.html")
+    return FileResponse("login.html")
+
+
+@app.get("/login.html")
+async def serve_login():
+    return FileResponse("login.html")
 
 
 @app.get("/script.js")
-async def serve_script():
+async def serve_script(request: Request):
+    if not check_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     return FileResponse("script.js", media_type="application/javascript")
 
 
 @app.get("/styles.css")
 async def serve_styles():
     return FileResponse("styles.css", media_type="text/css")
+
+
+@app.post("/api/login")
+def login(req: LoginRequest, request: Request):
+    if not APP_PASSWORD:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": "Server authentication not configured. Set APP_PASSWORD environment variable."}
+        )
+    if req.password == APP_PASSWORD:
+        token = create_session_token()
+        response = JSONResponse(content={"success": True, "message": "Authenticated"})
+        is_secure = request.url.scheme == "https" or "render.com" in request.headers.get("host", "")
+        response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=token,
+            max_age=SESSION_MAX_AGE,
+            httponly=True,
+            samesite="lax",
+            secure=is_secure,
+            path="/"
+        )
+        return response
+    return JSONResponse(status_code=401, content={"success": False, "message": "Incorrect password"})
+
+
+@app.post("/api/logout")
+def logout():
+    response = JSONResponse(content={"success": True, "message": "Logged out"})
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    return response
+
+
+@app.get("/api/auth-status")
+def auth_status(request: Request):
+    return {"authenticated": check_authenticated(request)}
 
 
 @app.get("/health")
@@ -158,6 +251,8 @@ def fetch_url(url: str, timeout: int = DEFAULT_TIMEOUT, max_retries: int = MAX_R
 @app.get("/api/search", response_model=SearchResponse)
 @limiter.limit(RATE_LIMIT)
 def search_products(request: Request, term: str = Query(..., description="Search term")):
+    if not check_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized. Please enter password.")
     if not term.strip():
         return SearchResponse(products=[], success=True, message="Empty query")
     try:
@@ -239,6 +334,8 @@ def _extract_title_from_url(url: str) -> str:
 @app.get("/api/check-stock", response_model=StockResponse)
 @limiter.limit(RATE_LIMIT)
 def check_stock(request: Request, url: str = Query(..., description="The product URL to check")):
+    if not check_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized. Please enter password.")
     if not _is_allowed_url(url):
         raise HTTPException(
             status_code=400,

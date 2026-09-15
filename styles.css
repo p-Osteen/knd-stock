@@ -319,6 +319,34 @@ body {
     color: var(--emerald-light);
 }
 
+.header-lock-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-subtle);
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--radius-full);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+    font-family: var(--font);
+    transition: all 0.2s var(--ease-out);
+}
+
+.header-lock-pill:hover {
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.35);
+    color: var(--ruby-light);
+    transform: translateY(-1px);
+}
+
+.header-lock-pill:hover .fa-lock {
+    color: var(--ruby-light);
+}
+
 .super-form {
     display: flex;
     flex-direction: column;

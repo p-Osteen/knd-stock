@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const countInstock = document.getElementById('count-instock');
     const countOutofstock = document.getElementById('count-outofstock');
     const countFailed = document.getElementById('count-failed');
+    const logoutBtn = document.getElementById('logout-btn');
 
     let BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://knd-stock.onrender.com';
 
@@ -92,6 +93,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 batchPanel.classList.add('hidden');
                 toggleBatchBtn.classList.remove('expanded');
             }
+        });
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await fetch(`${BACKEND_URL}/api/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch { }
+            window.location.reload();
         });
     }
 
@@ -159,7 +172,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const thisSearchId = ++searchIdCounter;
         showSearchLoading();
         try {
-            const res = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`);
+            const res = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`, {
+                credentials: 'include'
+            });
+            if (res.status === 401) {
+                window.location.reload();
+                return;
+            }
             if (thisSearchId !== searchIdCounter) return;
             const data = await res.json();
             if (thisSearchId !== searchIdCounter) return;
@@ -510,7 +529,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 for (let attempt = 0; attempt < 2; attempt++) {
                     try {
-                        const res = await fetch(`${BACKEND_URL}/api/check-stock?url=${encodeURIComponent(targetUrl)}`);
+                        const res = await fetch(`${BACKEND_URL}/api/check-stock?url=${encodeURIComponent(targetUrl)}`, {
+                            credentials: 'include'
+                        });
+                        if (res.status === 401) {
+                            window.location.reload();
+                            return;
+                        }
                         if (!res.ok) {
                             let errMsg = `HTTP ${res.status}`;
                             try {
