@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Polyfill requestIdleCallback if needed
     if (typeof window.requestIdleCallback !== 'function') {
         window.requestIdleCallback = function (cb, opts) {
             const timeout = (opts && opts.timeout) || 50;
@@ -17,58 +18,106 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    const form = document.getElementById('check-form');
-    const urlsInput = document.getElementById('product-urls');
-    const superInput = document.getElementById('product-urls-input');
-    const submitBtn = document.getElementById('submit-btn');
-    const btnLoader = document.getElementById('btn-loader');
+    // =========================================================================
+    // API & CONFIGURATION
+    // =========================================================================
+    let BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? ''
+        : 'https://knd-stock.onrender.com';
 
-    const searchDropdown = document.getElementById('knd-search-dropdown');
-    const searchResultsList = document.getElementById('knd-search-results');
+    // =========================================================================
+    // DOM ELEMENTS
+    // =========================================================================
+    // Screens & Top Navigation Tabs
+    const catalogView = document.getElementById('catalog-view');
+    const watchlistView = document.getElementById('watchlist-view');
+    const tabCatalogBtn = document.getElementById('tab-catalog-btn');
+    const tabWatchlistBtn = document.getElementById('tab-watchlist-btn');
+    const watchlistCountBadge = document.getElementById('watchlist-count-badge');
+    const logoutBtn = document.getElementById('logout-btn');
+    const lockBtnText = document.getElementById('lock-btn-text');
 
-    const toggleBatchBtn = document.getElementById('toggle-batch-btn');
-    const batchToggleText = document.getElementById('batch-toggle-text');
-    const batchChevron = document.getElementById('batch-chevron');
-    const batchPanel = document.getElementById('batch-panel');
+    // Catalog Controls & Elements
+    const catalogSearchInput = document.getElementById('catalog-search-input');
+    const catalogClearSearch = document.getElementById('catalog-clear-search');
+    const catalogSearchBtn = document.getElementById('catalog-search-btn');
+    const searchSpinner = document.getElementById('search-spinner');
 
-    const chipsList = document.getElementById('url-chips-list');
-    const chipsScroll = document.getElementById('url-chips-scroll');
-    const clearBtn = document.getElementById('clear-btn');
-    const pasteBtn = document.getElementById('paste-btn');
-    const uploadBtn = document.getElementById('upload-btn');
-    const fileInput = document.getElementById('file-upload-input');
-    const notificationArea = document.getElementById('notification-area');
-    const notificationMsg = document.getElementById('notification-msg');
-    const urlCounter = document.getElementById('url-counter');
-    const charCounter = document.getElementById('char-counter');
+    const filterCategory = document.getElementById('filter-category');
+    const filterBrand = document.getElementById('filter-brand');
+    const filterSubcategory = document.getElementById('filter-subcategory');
+    const catalogSortSelect = document.getElementById('catalog-sort-select');
+    const filterResetBtn = document.getElementById('filter-reset-btn');
 
-    const resultsHeader = document.getElementById('results-header');
-    const resultsCount = document.getElementById('results-count');
-    const retryFailedBtn = document.getElementById('retry-failed-btn');
-    const progressIndicator = document.getElementById('progress-indicator');
-    const progressBarFill = document.getElementById('progress-bar-fill');
-    const progressText = document.getElementById('progress-text');
-    const resultsToolbar = document.getElementById('results-toolbar');
-    const filterInput = document.getElementById('results-filter-input');
-    const sortSelect = document.getElementById('results-sort-select');
-    const emptyState = document.getElementById('empty-state');
-    const resultsGrid = document.getElementById('results-grid');
+    const catalogCountText = document.getElementById('catalog-count-text');
+    const catalogActiveFilterTags = document.getElementById('catalog-active-filter-tags');
+    const catalogRefreshBtn = document.getElementById('catalog-refresh-btn');
+
+    const catalogLoading = document.getElementById('catalog-loading');
+    const catalogEmpty = document.getElementById('catalog-empty');
+    const catalogEmptyResetBtn = document.getElementById('catalog-empty-reset-btn');
+    const catalogGrid = document.getElementById('catalog-grid');
+    const catalogPagination = document.getElementById('catalog-pagination');
+
+    // Dedicated Watchlist Screen Elements
+    const watchlistBackBtn = document.getElementById('watchlist-back-btn');
+    const watchlistTotalCount = document.getElementById('watchlist-total-count');
+    const watchlistCheckAllBtn = document.getElementById('watchlist-check-all-btn');
+    const watchlistCheckBtnText = document.getElementById('watchlist-check-btn-text');
+    const watchlistExportBtn = document.getElementById('watchlist-export-btn');
+    const watchlistImportBtn = document.getElementById('watchlist-import-btn');
+    const watchlistFileInput = document.getElementById('watchlist-file-input');
+    const watchlistClearAllBtn = document.getElementById('watchlist-clear-all-btn');
+    const watchlistFilterInput = document.getElementById('watchlist-filter-input');
+    const watchlistProgressWrap = document.getElementById('watchlist-progress-wrap');
+    const watchlistProgressFill = document.getElementById('watchlist-progress-fill');
+    const watchlistProgressText = document.getElementById('watchlist-progress-text');
+    const watchlistEmpty = document.getElementById('watchlist-empty');
+    const watchlistExploreBtn = document.getElementById('watchlist-explore-btn');
+    const watchlistList = document.getElementById('watchlist-list');
+
+    // Auth Gate Elements
+    const authGateModal = document.getElementById('auth-gate-modal');
+    const gateForm = document.getElementById('gate-login-form');
+    const gateInput = document.getElementById('gate-password-input');
+    const gateToggleBtn = document.getElementById('gate-toggle-pw-btn');
+    const gateToggleIcon = document.getElementById('gate-toggle-pw-icon');
+    const gateSubmitBtn = document.getElementById('gate-submit-btn');
+    const gateBtnSpinner = document.getElementById('gate-btn-spinner');
+    const gateError = document.getElementById('gate-error');
+    const gateErrorMsg = document.getElementById('gate-error-msg');
+
+    // Toast Container
     const toastContainer = document.getElementById('toast-container');
 
-    const countAll = document.getElementById('count-all');
-    const countInstock = document.getElementById('count-instock');
-    const countOutofstock = document.getElementById('count-outofstock');
-    const countFailed = document.getElementById('count-failed');
-    const logoutBtn = document.getElementById('logout-btn');
+    // =========================================================================
+    // STATE
+    // =========================================================================
+    const catalogState = {
+        page: 1,
+        limit: 24,
+        category: 'cars',
+        brand: 'all',
+        subcategory: 'all',
+        sort: 'latest',
+        search: '',
+        totalPages: 1,
+        totalCount: 0,
+        loading: false
+    };
 
-    let BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://knd-stock.onrender.com';
+    let liveCategoriesTree = [];
+    let isCheckingWatchlist = false;
 
-    let resultsData = [];
-    let completedCount = 0;
-    let totalCount = 0;
-    let urls = [];
-    let searchTimer = null;
-    let activeFilter = 'all';
+    // =========================================================================
+    // UTILITIES
+    // =========================================================================
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
 
     function showToast(msg, type = 'info') {
         if (!toastContainer) return;
@@ -83,32 +132,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 2800);
     }
 
-    if (toggleBatchBtn) {
-        toggleBatchBtn.addEventListener('click', () => {
-            const isHidden = batchPanel.classList.contains('hidden');
-            if (isHidden) {
-                batchPanel.classList.remove('hidden');
-                toggleBatchBtn.classList.add('expanded');
-            } else {
-                batchPanel.classList.add('hidden');
-                toggleBatchBtn.classList.remove('expanded');
-            }
-        });
+    function formatProductTitle(title) {
+        if (!title) return 'Diecast Model';
+        let clean = title.replace(/\s+/g, ' ').trim();
+        return clean;
     }
 
-    const authGateModal = document.getElementById('auth-gate-modal');
-    const gateForm = document.getElementById('gate-login-form');
-    const gateInput = document.getElementById('gate-password-input');
-    const gateToggleBtn = document.getElementById('gate-toggle-pw-btn');
-    const gateToggleIcon = document.getElementById('gate-toggle-pw-icon');
-    const gateSubmitBtn = document.getElementById('gate-submit-btn');
-    const gateBtnText = document.getElementById('gate-btn-text');
-    const gateBtnIcon = document.getElementById('gate-btn-icon');
-    const gateBtnSpinner = document.getElementById('gate-btn-spinner');
-    const gateError = document.getElementById('gate-error');
-    const gateErrorMsg = document.getElementById('gate-error-msg');
-    const lockBtnText = document.getElementById('lock-btn-text');
+    function parseUrlTitle(url) {
+        try {
+            const parsed = new URL(url);
+            const parts = parsed.pathname.split('/').filter(Boolean);
+            if (parts.length > 0) {
+                let slug = parts[parts.length - 1];
+                if (slug.length > 30 && parts.length > 1) {
+                    slug = parts[parts.length - 2];
+                }
+                return slug.replace(/[-_+]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            }
+        } catch { }
+        return 'Diecast Casting';
+    }
 
+    function isKndUrl(str) {
+        if (!str) return false;
+        return str.includes('karzanddolls.com') || str.startsWith('/details/') || str.startsWith('details/');
+    }
+
+    // =========================================================================
+    // AUTHENTICATION & SESSION
+    // =========================================================================
     function getAuthToken() {
         return localStorage.getItem('knd_session_token') || '';
     }
@@ -116,8 +168,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function setAuthToken(token) {
         if (token) {
             localStorage.setItem('knd_session_token', token);
+            document.body.classList.remove('not-authenticated');
         } else {
             localStorage.removeItem('knd_session_token');
+            document.body.classList.add('not-authenticated');
         }
         updateLockBtnState();
     }
@@ -143,6 +197,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function enforceAuthenticated() {
+        document.body.classList.remove('not-authenticated');
+        hideAuthGate();
+        updateLockBtnState();
+    }
+
+    function enforceUnauthenticated() {
+        setAuthToken('');
+        isAppInitialized = false;
+        document.body.classList.add('not-authenticated');
+        showAuthGate();
+        updateLockBtnState();
+    }
+
+    function handleApiUnauthorized() {
+        enforceUnauthenticated();
+        showToast('Authentication required. Please enter password.', 'error');
+    }
+
     function showAuthGate() {
         if (authGateModal) {
             authGateModal.classList.remove('hidden');
@@ -164,9 +237,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateLockBtnState();
     }
 
-    // Check on startup
     if (!getAuthToken()) {
-        showAuthGate();
+        enforceUnauthenticated();
     } else {
         updateLockBtnState();
     }
@@ -186,11 +258,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const password = (gateInput.value || '').trim();
             if (!password) return;
 
-            gateError.classList.remove('visible');
+            if (gateError) gateError.classList.remove('visible');
             gateSubmitBtn.disabled = true;
-            gateBtnText.textContent = 'Verifying…';
-            gateBtnIcon.style.display = 'none';
-            gateBtnSpinner.style.display = 'block';
+            if (gateBtnSpinner) gateBtnSpinner.style.display = 'block';
 
             try {
                 const res = await fetch(`${BACKEND_URL}/api/login`, {
@@ -199,708 +269,978 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ password }),
                     credentials: 'include'
                 });
-
-                const data = await res.json().catch(() => ({}));
-
-                if (res.ok && data.success) {
+                const data = await res.json();
+                if (res.ok && data.success && data.token) {
                     setAuthToken(data.token);
-                    gateBtnText.textContent = 'Access Granted!';
-                    gateBtnSpinner.style.display = 'none';
-                    gateBtnIcon.className = 'fa-solid fa-circle-check';
-                    gateBtnIcon.style.display = 'inline-block';
-                    gateSubmitBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-
-                    setTimeout(() => {
-                        hideAuthGate();
-                        gateSubmitBtn.disabled = false;
-                        gateBtnText.textContent = 'Unlock Access';
-                        gateBtnIcon.className = 'fa-solid fa-arrow-right';
-                        gateSubmitBtn.style.background = '';
-                        showToast('Session unlocked (7 days)', 'success');
-                    }, 400);
+                    enforceAuthenticated();
+                    showToast('Access unlocked! Session active for 7 days.', 'success');
+                    initApp();
                 } else {
-                    gateErrorMsg.textContent = data.message || 'Incorrect password. Please try again.';
-                    gateError.classList.add('visible');
-                    gateSubmitBtn.disabled = false;
-                    gateBtnText.textContent = 'Unlock Access';
-                    gateBtnIcon.style.display = 'inline-block';
-                    gateBtnSpinner.style.display = 'none';
-                    gateInput.select();
+                    if (gateError) {
+                        if (gateErrorMsg) gateErrorMsg.textContent = data.message || 'Incorrect password.';
+                        gateError.classList.add('visible');
+                    }
+                    if (gateInput) {
+                        gateInput.value = '';
+                        gateInput.focus();
+                    }
                 }
-            } catch (err) {
-                gateErrorMsg.textContent = 'Network error: could not connect to server.';
-                gateError.classList.add('visible');
+            } catch {
+                if (gateError) {
+                    if (gateErrorMsg) gateErrorMsg.textContent = 'Network error while contacting server.';
+                    gateError.classList.add('visible');
+                }
+            } finally {
                 gateSubmitBtn.disabled = false;
-                gateBtnText.textContent = 'Unlock Access';
-                gateBtnIcon.style.display = 'inline-block';
-                gateBtnSpinner.style.display = 'none';
+                if (gateBtnSpinner) gateBtnSpinner.style.display = 'none';
             }
         });
     }
 
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
-            if (getAuthToken()) {
+            const token = getAuthToken();
+            if (!token) {
+                enforceUnauthenticated();
+                return;
+            }
+            if (confirm('Lock this session? You will need to enter the password to check stock.')) {
                 try {
                     await fetch(`${BACKEND_URL}/api/logout`, {
                         method: 'POST',
+                        credentials: 'include'
+                    });
+                } catch { }
+                enforceUnauthenticated();
+                showToast('Session locked.', 'info');
+            }
+        });
+    }
+
+    // =========================================================================
+    // VIEW SWITCHING (Catalog vs Dedicated Watchlist Screen)
+    // =========================================================================
+    function switchView(viewName) {
+        if (document.body.classList.contains('not-authenticated')) {
+            showAuthGate();
+            return;
+        }
+        if (viewName === 'watchlist') {
+            catalogView.classList.add('hidden');
+            watchlistView.classList.remove('hidden');
+            tabCatalogBtn.classList.remove('active');
+            tabWatchlistBtn.classList.add('active');
+            renderWatchlistUI();
+            window.location.hash = 'watchlist';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            watchlistView.classList.add('hidden');
+            catalogView.classList.remove('hidden');
+            tabWatchlistBtn.classList.remove('active');
+            tabCatalogBtn.classList.add('active');
+            window.location.hash = 'catalog';
+        }
+    }
+
+    if (tabCatalogBtn) tabCatalogBtn.addEventListener('click', () => switchView('catalog'));
+    if (tabWatchlistBtn) tabWatchlistBtn.addEventListener('click', () => switchView('watchlist'));
+    if (watchlistBackBtn) watchlistBackBtn.addEventListener('click', () => switchView('catalog'));
+    if (watchlistExploreBtn) watchlistExploreBtn.addEventListener('click', () => switchView('catalog'));
+
+    // Handle initial URL hash
+    window.addEventListener('hashchange', () => {
+        if (window.location.hash === '#watchlist') {
+            switchView('watchlist');
+        } else {
+            switchView('catalog');
+        }
+    });
+
+    // =========================================================================
+    // WATCHLIST SYSTEM (LocalStorage + JSON Export/Import + Live Re-check)
+    // =========================================================================
+    const WATCHLIST_KEY = 'knd_watchlist_v1';
+
+    function getWatchlist() {
+        try {
+            const raw = localStorage.getItem(WATCHLIST_KEY);
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    }
+
+    function saveWatchlist(list) {
+        try {
+            localStorage.setItem(WATCHLIST_KEY, JSON.stringify(list));
+            updateWatchlistBadge();
+        } catch { }
+    }
+
+    function isWatchlisted(url) {
+        if (!url) return false;
+        return getWatchlist().some(item => item.url === url);
+    }
+
+    function toggleWatchlistItem(product) {
+        if (!product || !product.url) return false;
+        let list = getWatchlist();
+        const existingIdx = list.findIndex(x => x.url === product.url);
+        let added = false;
+
+        if (existingIdx > -1) {
+            list.splice(existingIdx, 1);
+            added = false;
+        } else {
+            list.unshift({
+                url: product.url,
+                product_name: product.product_name || parseUrlTitle(product.url),
+                image: product.image || '',
+                price: product.price || '',
+                last_stock: typeof product.stock_quantity === 'number' ? product.stock_quantity : (product.last_stock || 0),
+                prev_stock: typeof product.stock_quantity === 'number' ? product.stock_quantity : (product.prev_stock || 0),
+                last_checked: Date.now()
+            });
+            added = true;
+        }
+
+        saveWatchlist(list);
+        updateAllCardStarStates();
+        renderWatchlistUI();
+        return added;
+    }
+
+    function updateWatchlistBadge() {
+        if (!watchlistCountBadge) return;
+        const count = getWatchlist().length;
+        watchlistCountBadge.textContent = count;
+        if (watchlistTotalCount) {
+            watchlistTotalCount.textContent = `${count} item${count === 1 ? '' : 's'}`;
+        }
+    }
+
+    function updateAllCardStarStates() {
+        document.querySelectorAll('.card-star-btn').forEach(star => {
+            const card = star.closest('.result-card');
+            const cardUrl = card ? card.getAttribute('data-url') : null;
+            if (cardUrl) {
+                const saved = isWatchlisted(cardUrl);
+                star.classList.toggle('is-active', saved);
+                star.title = saved ? 'Remove from Watchlist' : 'Save to Watchlist';
+                star.innerHTML = `<i class="${saved ? 'fa-solid' : 'fa-regular'} fa-bookmark"></i>`;
+            }
+        });
+    }
+
+    function updateWatchlistCardElement(card, item) {
+        if (!card) return;
+        const inStock = item.last_stock > 0;
+        const isLow = inStock && item.last_stock <= 3;
+        const isRestocked = item.prev_stock === 0 && item.last_stock > 0;
+
+        const bannerClass = inStock ? (isLow ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
+        const statusLabel = inStock ? (isLow ? 'Low Stock' : 'In Stock') : 'Out of Stock';
+        const icon = inStock ? (isLow ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
+        const qtyText = inStock ? `${item.last_stock} available` : '0 available';
+
+        const banner = card.querySelector('.stock-banner');
+        if (banner) {
+            banner.className = `stock-banner ${bannerClass}`;
+            const statusDiv = banner.querySelector('.stock-banner__status');
+            if (statusDiv) {
+                const restockTag = isRestocked ? '<span class="restock-badge"><i class="fa-solid fa-sparkles"></i> Restocked!</span>' : '';
+                statusDiv.innerHTML = `<i class="fa-solid ${icon}"></i><span>${statusLabel}</span>${restockTag}`;
+            }
+            const countSpan = banner.querySelector('.stock-banner__count');
+            if (countSpan) {
+                countSpan.textContent = qtyText;
+            }
+        }
+
+        if (item.image) {
+            const showcase = card.querySelector('.card-showcase');
+            const placeholder = showcase ? showcase.querySelector('.card-showcase-placeholder') : null;
+            if (placeholder) {
+                placeholder.remove();
+                const img = document.createElement('img');
+                img.src = item.image;
+                img.className = 'card-showcase-img';
+                img.alt = item.product_name || 'Diecast Model';
+                img.loading = 'lazy';
+                showcase.appendChild(img);
+            }
+        }
+    }
+
+    function renderWatchlistUI() {
+        if (!watchlistList || !watchlistEmpty) return;
+        const query = (watchlistFilterInput ? watchlistFilterInput.value : '').toLowerCase().trim();
+        let list = getWatchlist();
+
+        if (query) {
+            list = list.filter(item => (item.product_name || '').toLowerCase().includes(query));
+        }
+
+        if (list.length === 0) {
+            watchlistEmpty.classList.remove('hidden');
+            watchlistList.innerHTML = '';
+            return;
+        }
+
+        watchlistEmpty.classList.add('hidden');
+        watchlistList.innerHTML = '';
+
+        list.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'result-card';
+            card.setAttribute('data-url', item.url);
+
+            const inStock = item.last_stock > 0;
+            const isRestocked = item.prev_stock === 0 && item.last_stock > 0;
+
+            const imgHtml = item.image
+                ? `<img src="${escapeHtml(item.image)}" class="card-showcase-img" alt="${escapeHtml(item.product_name)}" loading="lazy" />`
+                : `<div class="card-showcase-placeholder"><i class="fa-solid fa-car"></i></div>`;
+
+            const priceHtml = item.price ? `<div class="floating-price-tag">${escapeHtml(item.price)}</div>` : '';
+
+            const bannerClass = inStock ? (item.last_stock <= 3 ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
+            const statusLabel = inStock ? (item.last_stock <= 3 ? 'Low Stock' : 'In Stock') : 'Out of Stock';
+            const icon = inStock ? (item.last_stock <= 3 ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
+            const qtyText = inStock ? `${item.last_stock} available` : '0 available';
+            const restockTag = isRestocked ? '<span class="restock-badge"><i class="fa-solid fa-sparkles"></i> Restocked!</span>' : '';
+
+            card.innerHTML = `
+                <div class="card-showcase">
+                    ${priceHtml}
+                    ${imgHtml}
+                </div>
+                <div class="card-details">
+                    <div class="card-title" title="${escapeHtml(item.product_name)}">${escapeHtml(formatProductTitle(item.product_name))}</div>
+                    <div class="stock-banner ${bannerClass}">
+                        <div class="stock-banner__status">
+                            <i class="fa-solid ${icon}"></i>
+                            <span>${statusLabel}</span>
+                            ${restockTag}
+                        </div>
+                        <div class="stock-banner__qty">
+                            <span class="stock-banner__count">${qtyText}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="${escapeHtml(item.url)}" target="_blank" class="cta-btn cta-btn--primary" title="View on Karz and Dolls">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> View Store
+                    </a>
+                    <button type="button" class="wl-single-check-btn" title="Check live stock now">
+                        <i class="fa-solid fa-rotate-right"></i> Check
+                    </button>
+                    <button type="button" class="wl-remove-btn" title="Remove from Watchlist">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            `;
+
+            // Single check button with width lock and in-place DOM update
+            const singleCheckBtn = card.querySelector('.wl-single-check-btn');
+            singleCheckBtn.addEventListener('click', async () => {
+                if (document.body.classList.contains('not-authenticated')) {
+                    showAuthGate();
+                    return;
+                }
+                const btnW = singleCheckBtn.offsetWidth;
+                if (btnW > 0) singleCheckBtn.style.minWidth = `${btnW}px`;
+                const origHtml = singleCheckBtn.innerHTML;
+                singleCheckBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Checking…`;
+                singleCheckBtn.disabled = true;
+
+                try {
+                    const res = await fetch(`${BACKEND_URL}/api/check-stock?url=${encodeURIComponent(item.url)}`, {
                         credentials: 'include',
                         headers: getAuthHeaders()
                     });
-                } catch { }
-                setAuthToken('');
-                showToast('Session locked', 'info');
-                showAuthGate();
-            } else {
-                showAuthGate();
-            }
+                    if (res.status === 401) {
+                        handleApiUnauthorized();
+                        return;
+                    }
+                    const data = await res.json();
+                    if (data.success) {
+                        item.prev_stock = item.last_stock;
+                        item.last_stock = data.stock_quantity;
+                        if (data.image && !item.image) item.image = data.image;
+                        saveWatchlist(list);
+
+                        // In-place DOM update prevents view shrinking/jumping
+                        updateWatchlistCardElement(card, item);
+                        showToast(`Updated stock: ${data.stock_quantity} available`, 'success');
+                    } else {
+                        showToast(data.message || 'Lookup failed', 'error');
+                    }
+                } catch {
+                    showToast('Failed to check stock', 'error');
+                } finally {
+                    singleCheckBtn.disabled = false;
+                    singleCheckBtn.innerHTML = origHtml;
+                    singleCheckBtn.style.minWidth = '';
+                }
+            });
+
+            // Remove button
+            const removeBtn = card.querySelector('.wl-remove-btn');
+            removeBtn.addEventListener('click', () => {
+                toggleWatchlistItem(item);
+                showToast('Removed from Watchlist', 'info');
+            });
+
+            watchlistList.appendChild(card);
         });
     }
 
-    function isKndUrl(url) {
-        try {
-            const parsed = new URL(url);
-            return parsed.hostname === 'karzanddolls.com' || parsed.hostname.endsWith('.karzanddolls.com');
-        } catch {
-            return false;
-        }
+    if (watchlistFilterInput) {
+        watchlistFilterInput.addEventListener('input', () => {
+            renderWatchlistUI();
+        });
     }
 
-    superInput.addEventListener('input', (e) => {
-        const val = e.target.value.trim();
-        if (searchTimer) clearTimeout(searchTimer);
-
-        if (!val || isKndUrl(val) || val.startsWith('http://') || val.startsWith('https://')) {
-            hideSearchDropdown();
-            return;
-        }
-
-        if (val.length < 2) {
-            hideSearchDropdown();
-            return;
-        }
-
-        searchTimer = setTimeout(() => {
-            performLiveSearch(val);
-        }, 150);
-    });
-
-    superInput.addEventListener('paste', (e) => {
-        const pasteText = (e.clipboardData || window.clipboardData).getData('text');
-        if (pasteText && (pasteText.includes('\n') || pasteText.includes('\r'))) {
-            e.preventDefault();
-            addUrls(pasteText);
-            if (batchPanel.classList.contains('hidden')) {
-                batchPanel.classList.remove('hidden');
-                toggleBatchBtn.classList.add('expanded');
-            }
-            superInput.value = '';
-            showToast('Batch links queued', 'info');
-        }
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!superInput.contains(e.target) && !searchDropdown.contains(e.target)) {
-            hideSearchDropdown();
-        }
-    });
-
-    let searchIdCounter = 0;
-
-    function showSearchLoading() {
-        searchResultsList.innerHTML = `
-            <div class="search-loading">
-                <div class="search-loading-spinner"></div>
-                <span>Searching Karz &amp; Dolls…</span>
-            </div>
-        `;
-        searchDropdown.classList.remove('hidden');
-    }
-
-    async function performLiveSearch(term) {
-        const thisSearchId = ++searchIdCounter;
-        showSearchLoading();
-        try {
-            const res = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`, {
-                credentials: 'include',
-                headers: getAuthHeaders()
-            });
-            if (res.status === 401) {
-                hideSearchDropdown();
-                setAuthToken('');
-                showToast('Authentication required (401). Please enter password.', 'error');
+    // Watchlist JSON Export
+    if (watchlistExportBtn) {
+        watchlistExportBtn.addEventListener('click', () => {
+            if (document.body.classList.contains('not-authenticated')) {
                 showAuthGate();
                 return;
             }
-            if (thisSearchId !== searchIdCounter) return;
-            const data = await res.json();
-            if (thisSearchId !== searchIdCounter) return;
-            if (data.success && data.products && data.products.length > 0) {
-                renderSearchDropdown(data.products);
-            } else {
-                searchResultsList.innerHTML = `
-                    <div class="search-loading">
-                        <span>No products found for "${escapeHtml(term)}"</span>
-                    </div>
-                `;
+            const list = getWatchlist();
+            if (list.length === 0) {
+                showToast('Your watchlist is empty to export.', 'info');
+                return;
             }
-        } catch {
-            if (thisSearchId === searchIdCounter) hideSearchDropdown();
-        }
-    }
-
-    function renderSearchDropdown(products) {
-        searchResultsList.innerHTML = '';
-        products.slice(0, 8).forEach(p => {
-            const item = document.createElement('div');
-            const isSelected = p.url && urls.includes(p.url);
-            item.className = 'search-item' + (isSelected ? ' selected' : '');
-
-            const imgHtml = p.image
-                ? `<img src="${escapeHtml(p.image)}" class="search-item-img" alt="" />`
-                : `<div class="search-item-img" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);"><i class="fa-solid fa-car"></i></div>`;
-
-            const actionText = isSelected
-                ? '<i class="fa-solid fa-circle-check"></i> Added'
-                : '<i class="fa-solid fa-plus"></i> Add';
-
-            item.innerHTML = `
-                ${imgHtml}
-                <div class="search-item-info">
-                    <div class="search-item-title">${escapeHtml(formatProductTitle(p.product_name))}</div>
-                    <div class="search-item-meta">
-                        ${p.price ? `<span class="search-item-price">${escapeHtml(p.price)}</span>` : ''}
-                    </div>
-                </div>
-                <div class="search-item-action ${isSelected ? 'added' : ''}">${actionText}</div>
-            `;
-
-            item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (!p.url || !isKndUrl(p.url)) return;
-
-                const idx = urls.indexOf(p.url);
-                if (idx > -1) {
-                    urls.splice(idx, 1);
-                    item.classList.remove('selected');
-                    item.querySelector('.search-item-action').innerHTML = '<i class="fa-solid fa-plus"></i> Add';
-                    item.querySelector('.search-item-action').classList.remove('added');
-                } else {
-                    urls.push(p.url);
-                    item.classList.add('selected');
-                    item.querySelector('.search-item-action').innerHTML = '<i class="fa-solid fa-circle-check"></i> Added';
-                    item.querySelector('.search-item-action').classList.add('added');
-                    showToast('Added to check queue', 'success');
-                }
-                renderChips();
-                updateCounters();
-            });
-
-            searchResultsList.appendChild(item);
-        });
-        searchDropdown.classList.remove('hidden');
-    }
-
-    function hideSearchDropdown() {
-        searchDropdown.classList.add('hidden');
-        searchResultsList.innerHTML = '';
-    }
-
-    function addUrls(text) {
-        const candidates = text.split(/[\n\r]+/)
-            .map(u => u.trim())
-            .filter(u => u.length > 0 && !urls.includes(u));
-
-        if (candidates.length === 0) return;
-
-        const valid = [];
-        const invalid = [];
-        candidates.forEach(u => {
-            if (isKndUrl(u)) {
-                valid.push(u);
-            } else {
-                invalid.push(u);
-            }
-        });
-
-        if (invalid.length > 0) {
-            showNotification(`${invalid.length} non-karzanddolls.com link(s) skipped.`);
-        } else {
-            hideNotification();
-        }
-
-        valid.forEach(u => urls.push(u));
-        renderChips();
-        updateCounters();
-    }
-
-    function removeUrl(index) {
-        urls.splice(index, 1);
-        renderChips();
-        updateCounters();
-    }
-
-    function clearAllUrls() {
-        urls = [];
-        renderChips();
-        updateCounters();
-        showToast('Cleared queued links', 'info');
-    }
-
-    function renderChips() {
-        chipsList.innerHTML = '';
-        urls.forEach((url, idx) => {
-            const chip = document.createElement('div');
-            chip.className = 'url-chip';
-            chip.innerHTML = `
-                <span>${escapeHtml(formatProductTitle(parseUrlTitle(url)))}</span>
-                <button type="button" class="url-chip__remove" data-index="${idx}">&times;</button>
-            `;
-            chip.querySelector('.url-chip__remove').addEventListener('click', () => removeUrl(idx));
-            chipsList.appendChild(chip);
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(list, null, 2));
+            const downloadAnchor = document.createElement('a');
+            const dateStr = new Date().toISOString().slice(0, 10);
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `knd-watchlist-${dateStr}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast(`Exported ${list.length} watchlist items!`, 'success');
         });
     }
 
-    function formatProductTitle(title) {
-        if (!title) return 'Unknown Product';
-        const words = String(title).trim().split(/\s+/);
-        const acronyms = new Set([
-            'LB*WORKS', 'LBWK', 'GT-R', 'GTR', 'R34', 'R35', 'R32', 'R33', 'R30',
-            'F1', 'GP', 'ID.', 'BUZZ', 'MINI', 'GT', 'USA', 'V1', 'V2', 'V3',
-            'TRD', 'DBS', 'ZR1', 'S15', 'BMW', 'M3', 'M4', 'RS', 'AMG', '2ND', '1ST', '3RD', '40'
-        ]);
-
-        return words.map(w => {
-            const upper = w.toUpperCase();
-            if (acronyms.has(upper)) return upper;
-            if (/^#?\d+([A-Z]+)?$/i.test(w)) return upper;
-            if (w.length <= 2 && !['A', 'AN', 'OF', 'IN', 'ON', 'AT', 'TO'].includes(upper)) return upper;
-            return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-        }).join(' ');
-    }
-
-    function parseUrlTitle(url) {
-        try {
-            let decoded = url;
-            try {
-                decoded = decodeURIComponent(url);
-            } catch { }
-            const parsed = new URL(decoded);
-            const parts = parsed.pathname.split('/').filter(Boolean);
-            if (parts.length > 0) {
-                let slug = parts[parts.length - 1];
-                if (/^\d+$/.test(slug) && parts.length > 1) {
-                    slug = parts[parts.length - 2];
-                }
-                slug = slug.replace(/%C2%A0/gi, ' ')
-                    .replace(/\u00a0/g, ' ')
-                    .replace(/[+_\-]+/g, ' ');
-                slug = slug.replace(/\s+/g, ' ').trim();
-                return slug.split(' ')
-                    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-                    .join(' ');
-            }
-            return parsed.hostname;
-        } catch {
-            return url;
-        }
-    }
-
-    function updateCounters() {
-        const count = urls.length;
-        urlCounter.textContent = `${count} Link${count === 1 ? '' : 's'} Queued`;
-        batchToggleText.textContent = `Multiple links queued (${count})`;
-
-        let totalLen = urls.reduce((acc, u) => acc + u.length, 0);
-        charCounter.textContent = `${totalLen} chars`;
-    }
-
-    function updateFilterCounts() {
-        const total = resultsData.length;
-        const inStockItems = resultsData.filter(d => d.success && d.stock_quantity > 0);
-        const outStockItems = resultsData.filter(d => d.success && d.stock_quantity === 0);
-        const inStock = inStockItems.length;
-        const outStock = outStockItems.length;
-        const failed = resultsData.filter(d => !d.success).length;
-
-        if (countAll) countAll.textContent = total;
-        if (countInstock) countInstock.textContent = inStock;
-        if (countOutofstock) countOutofstock.textContent = outStock;
-        if (countFailed) countFailed.textContent = failed;
-
-        if (resultsCount) {
-            resultsCount.textContent = `(${total} item${total === 1 ? '' : 's'})`;
-        }
-
-
-        if (retryFailedBtn) {
-            if (failed > 0) {
-                const retryText = document.getElementById('retry-failed-text');
-                if (retryText) retryText.textContent = `Retry Failed (${failed})`;
-                retryFailedBtn.classList.remove('hidden');
-            } else {
-                retryFailedBtn.classList.add('hidden');
-            }
-        }
-    }
-
-    pasteBtn.addEventListener('click', async () => {
-        try {
-            const text = await navigator.clipboard.readText();
-            if (text) {
-                addUrls(text);
-                if (batchPanel.classList.contains('hidden')) {
-                    batchPanel.classList.remove('hidden');
-                    toggleBatchBtn.classList.add('expanded');
-                }
-                showToast('Pasted from clipboard', 'info');
-            }
-        } catch {
-            showNotification('Clipboard access denied. Paste directly into input.');
-        }
-    });
-
-    uploadBtn.addEventListener('click', () => fileInput.click());
-
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-            addUrls(evt.target.result);
-            if (batchPanel.classList.contains('hidden')) {
-                batchPanel.classList.remove('hidden');
-                toggleBatchBtn.classList.add('expanded');
-            }
-            showToast(`Loaded links from ${file.name}`, 'success');
-        };
-        reader.readAsText(file);
-    });
-
-    clearBtn.addEventListener('click', clearAllUrls);
-
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const inputVal = superInput.value.trim();
-        if (inputVal) {
-            if (isKndUrl(inputVal)) {
-                if (!urls.includes(inputVal)) urls.push(inputVal);
-                superInput.value = '';
-            }
-        }
-
-        if (urls.length === 0 && inputVal) {
-            performLiveSearchAndCheckFirst(inputVal);
-            return;
-        }
-
-        if (urls.length === 0) {
-            showNotification('Please enter a product name or link to check.');
-            return;
-        }
-
-        startBatchCheck();
-    });
-
-    async function performLiveSearchAndCheckFirst(term) {
-        setLoading(true);
-        try {
-            const res = await fetch(`${BACKEND_URL}/api/search?term=${encodeURIComponent(term)}`, {
-                credentials: 'include',
-                headers: getAuthHeaders()
-            });
-            if (res.status === 401) {
-                hideSearchDropdown();
-                setAuthToken('');
-                showToast('Authentication required (401). Please enter password.', 'error');
+    // Watchlist JSON Import
+    if (watchlistImportBtn && watchlistFileInput) {
+        watchlistImportBtn.addEventListener('click', () => {
+            if (document.body.classList.contains('not-authenticated')) {
                 showAuthGate();
                 return;
             }
-            const data = await res.json();
-            if (data.success && data.products && data.products.length > 0) {
-                const first = data.products[0];
-                if (first.url) {
-                    urls.push(first.url);
-                    superInput.value = '';
-                    startBatchCheck();
-                    return;
+            watchlistFileInput.click();
+        });
+
+        watchlistFileInput.addEventListener('change', (e) => {
+            if (document.body.classList.contains('not-authenticated')) {
+                showAuthGate();
+                return;
+            }
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const imported = JSON.parse(event.target.result);
+                    if (Array.isArray(imported)) {
+                        let existing = getWatchlist();
+                        let addedCount = 0;
+                        imported.forEach(it => {
+                            if (it.url && !existing.some(x => x.url === it.url)) {
+                                existing.unshift({
+                                    url: it.url,
+                                    product_name: it.product_name || parseUrlTitle(it.url),
+                                    image: it.image || '',
+                                    price: it.price || '',
+                                    last_stock: it.last_stock || 0,
+                                    prev_stock: it.prev_stock || 0,
+                                    last_checked: Date.now()
+                                });
+                                addedCount++;
+                            }
+                        });
+                        saveWatchlist(existing);
+                        renderWatchlistUI();
+                        updateAllCardStarStates();
+                        showToast(`Imported ${addedCount} items into watchlist!`, 'success');
+                    } else {
+                        showToast('Invalid watchlist JSON structure.', 'error');
+                    }
+                } catch {
+                    showToast('Failed to parse JSON file.', 'error');
                 }
+            };
+            reader.readAsText(file);
+            watchlistFileInput.value = '';
+        });
+    }
+
+    // Watchlist Clear All
+    if (watchlistClearAllBtn) {
+        watchlistClearAllBtn.addEventListener('click', () => {
+            if (document.body.classList.contains('not-authenticated')) {
+                showAuthGate();
+                return;
             }
-            showNotification(`No products found for "${term}".`);
-        } catch {
-            showNotification('Error performing search.');
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    function renderSkeletonPlaceholders(count) {
-        resultsGrid.innerHTML = '';
-        const num = Math.min(count, 8);
-        for (let i = 0; i < num; i++) {
-            const sk = document.createElement('div');
-            sk.className = 'skeleton-card';
-            sk.innerHTML = `
-                <div class="skeleton-showcase"></div>
-                <div class="skeleton-line skeleton-line--title"></div>
-                <div class="skeleton-line skeleton-line--sub"></div>
-                <div class="skeleton-line skeleton-line--btn"></div>
-            `;
-            resultsGrid.appendChild(sk);
-        }
-    }
-
-    async function startBatchCheck() {
-        if (urls.length === 0) return;
-        resultsData = [];
-        await runBatchQueue([...urls], true);
-    }
-
-    async function runBatchQueue(targetUrls, isNewBatch) {
-        if (targetUrls.length === 0) return;
-        setLoading(true);
-        hideNotification();
-        emptyState.classList.add('hidden');
-
-        if (isNewBatch) {
-            completedCount = 0;
-            totalCount = targetUrls.length;
-            renderSkeletonPlaceholders(totalCount);
-        } else {
-            totalCount = targetUrls.length;
-            completedCount = 0;
-        }
-
-        resultsHeader.classList.remove('hidden');
-        if (resultsToolbar) resultsToolbar.classList.remove('hidden');
-        progressIndicator.classList.remove('hidden');
-        updateProgress();
-        updateFilterCounts();
-
-        const queue = [...targetUrls];
-        const CONCURRENCY = 3;
-        let skeletonsCleared = !isNewBatch;
-
-        async function worker(workerId) {
-            if (workerId > 0) {
-                await new Promise(r => setTimeout(r, workerId * 200));
+            const list = getWatchlist();
+            if (list.length === 0) return;
+            if (confirm(`Remove all ${list.length} items from your watchlist?`)) {
+                saveWatchlist([]);
+                renderWatchlistUI();
+                updateAllCardStarStates();
+                showToast('Watchlist cleared.', 'info');
             }
+        });
+    }
 
-            while (queue.length > 0) {
-                const targetUrl = queue.shift();
-                let itemData = null;
+    // Watchlist Check All Stock Now
+    if (watchlistCheckAllBtn) {
+        watchlistCheckAllBtn.addEventListener('click', async () => {
+            if (document.body.classList.contains('not-authenticated')) {
+                showAuthGate();
+                return;
+            }
+            const list = getWatchlist();
+            if (list.length === 0) {
+                showToast('Watchlist is empty. Add some items to check stock.', 'info');
+                return;
+            }
+            if (isCheckingWatchlist) return;
 
-                for (let attempt = 0; attempt < 2; attempt++) {
+            const origBtnW = watchlistCheckAllBtn.offsetWidth;
+            if (origBtnW > 0) watchlistCheckAllBtn.style.minWidth = `${origBtnW}px`;
+
+            isCheckingWatchlist = true;
+            watchlistCheckAllBtn.disabled = true;
+            if (watchlistCheckBtnText) watchlistCheckBtnText.textContent = 'Checking Stock…';
+            if (watchlistProgressWrap) watchlistProgressWrap.classList.remove('hidden');
+
+            let completed = 0;
+            let inStockCount = 0;
+            let restockedCount = 0;
+            const total = list.length;
+
+            const updateProg = () => {
+                const pct = Math.round((completed / total) * 100);
+                if (watchlistProgressFill) watchlistProgressFill.style.width = `${pct}%`;
+                if (watchlistProgressText) watchlistProgressText.textContent = `${completed} / ${total}`;
+            };
+            updateProg();
+
+            const queue = [...list];
+            const CONCURRENCY = 3;
+
+            async function worker() {
+                while (queue.length > 0) {
+                    const item = queue.shift();
                     try {
-                        const res = await fetch(`${BACKEND_URL}/api/check-stock?url=${encodeURIComponent(targetUrl)}`, {
+                        const res = await fetch(`${BACKEND_URL}/api/check-stock?url=${encodeURIComponent(item.url)}`, {
                             credentials: 'include',
                             headers: getAuthHeaders()
                         });
                         if (res.status === 401) {
-                            hideSearchDropdown();
-                            setAuthToken('');
-                            showToast('Authentication required (401). Please enter password.', 'error');
-                            showAuthGate();
-                            setLoading(false);
+                            handleApiUnauthorized();
                             return;
                         }
-                        if (!res.ok) {
-                            let errMsg = `HTTP ${res.status}`;
-                            try {
-                                const errJson = await res.json();
-                                errMsg = errJson.error || errJson.detail || errJson.message || errMsg;
-                            } catch { }
-                            itemData = {
-                                url: targetUrl,
-                                product_name: parseUrlTitle(targetUrl),
-                                stock_quantity: 0,
-                                success: false,
-                                message: errMsg
-                            };
-                        } else {
-                            itemData = await res.json();
-                            itemData.url = targetUrl;
-                            if (!itemData.product_name || itemData.product_name === 'Unknown' || itemData.product_name.trim() === '') {
-                                itemData.product_name = parseUrlTitle(targetUrl);
+                        const data = await res.json();
+                        if (data.success) {
+                            if (item.last_stock === 0 && data.stock_quantity > 0) {
+                                restockedCount++;
                             }
+                            item.prev_stock = item.last_stock;
+                            item.last_stock = data.stock_quantity;
+                            if (data.image && !item.image) item.image = data.image;
+                            if (data.stock_quantity > 0) inStockCount++;
                         }
-                    } catch (err) {
-                        itemData = {
-                            url: targetUrl,
-                            product_name: parseUrlTitle(targetUrl),
-                            stock_quantity: 0,
-                            success: false,
-                            message: err.message || 'Network connection failed'
-                        };
-                    }
-
-                    if (itemData && itemData.success) {
-                        break;
-                    }
-                    if (attempt === 0) {
-                        await new Promise(r => setTimeout(r, 800));
-                    }
+                    } catch { }
+                    completed++;
+                    updateProg();
+                    await new Promise(r => setTimeout(r, 150));
                 }
-
-                if (!skeletonsCleared && isNewBatch) {
-                    resultsGrid.innerHTML = '';
-                    skeletonsCleared = true;
-                }
-
-                const existingIdx = resultsData.findIndex(d => d.url === targetUrl);
-                if (existingIdx > -1) {
-                    resultsData[existingIdx] = itemData;
-                    const existingCard = resultsGrid.querySelector(`[data-url="${CSS.escape(targetUrl)}"]`);
-                    if (existingCard) {
-                        const newCard = createResultCard(itemData);
-                        existingCard.replaceWith(newCard);
-                    } else if (matchesCurrentFilter(itemData)) {
-                        resultsGrid.appendChild(createResultCard(itemData));
-                    }
-                } else {
-                    resultsData.push(itemData);
-                    if (matchesCurrentFilter(itemData)) {
-                        resultsGrid.appendChild(createResultCard(itemData));
-                    }
-                }
-
-                completedCount++;
-                updateProgress();
-                updateFilterCounts();
-                await new Promise(r => setTimeout(r, 200));
             }
-        }
 
-        const workers = Array(Math.min(CONCURRENCY, queue.length)).fill(null).map((_, i) => worker(i));
-        await Promise.all(workers);
+            const workers = Array(Math.min(CONCURRENCY, total)).fill(null).map(() => worker());
+            await Promise.all(workers);
 
-        if (!skeletonsCleared && resultsData.length > 0) {
-            filterResults();
-        }
+            saveWatchlist(list);
+            renderWatchlistUI();
 
-        setLoading(false);
-        progressIndicator.classList.add('hidden');
-        updateFilterCounts();
+            isCheckingWatchlist = false;
+            watchlistCheckAllBtn.disabled = false;
+            if (watchlistCheckBtnText) watchlistCheckBtnText.textContent = 'Check All Stock Now';
+            watchlistCheckAllBtn.style.minWidth = '';
+            setTimeout(() => {
+                if (watchlistProgressWrap) watchlistProgressWrap.classList.add('hidden');
+            }, 1200);
+
+            let msg = `Check complete! ${inStockCount} of ${total} in stock.`;
+            if (restockedCount > 0) msg += ` 🎉 ${restockedCount} Restocked!`;
+            showToast(msg, 'success');
+        });
     }
 
-    function matchesCurrentFilter(item) {
-        const query = filterInput ? filterInput.value.toLowerCase().trim() : '';
-        const name = (item.product_name || '').toLowerCase();
-        if (query && !name.includes(query)) return false;
-
-        if (activeFilter === 'instock') return item.success && item.stock_quantity > 0;
-        if (activeFilter === 'outofstock') return item.success && item.stock_quantity === 0;
-        if (activeFilter === 'error') return !item.success;
-        return true;
+    // =========================================================================
+    // CATEGORIES TREE & 3-TIER DROPDOWNS
+    // =========================================================================
+    async function fetchCategoriesTree() {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/categories`, {
+                credentials: 'include',
+                headers: getAuthHeaders()
+            });
+            if (res.status === 401) {
+                handleApiUnauthorized();
+                return;
+            }
+            const json = await res.json();
+            if (json.success && Array.isArray(json.categories)) {
+                liveCategoriesTree = json.categories;
+                populateBrandDropdown(true);
+                populateSubcategoryDropdown(true);
+            }
+        } catch (err) {
+            console.warn('Could not fetch categories tree', err);
+        }
     }
 
-    function createResultCard(item) {
-        const card = document.createElement('div');
-        const inStock = item.success && item.stock_quantity > 0;
-        const outOfStock = item.success && item.stock_quantity === 0;
-        const isError = !item.success;
+    function getSelectedCategoryObj() {
+        const catSlug = filterCategory ? filterCategory.value : 'cars';
+        return liveCategoriesTree.find(c => c.slug === catSlug) || null;
+    }
 
-        card.className = 'result-card' + (isError ? ' is-error' : '');
-        card.setAttribute('data-url', item.url || '');
+    function populateBrandDropdown(forceSelectFirst = false) {
+        if (!filterBrand) return;
+        const previousBrand = filterBrand.value;
+        filterBrand.innerHTML = '';
 
-        const rawTitle = item.product_name && item.product_name !== 'Unknown'
-            ? item.product_name
-            : parseUrlTitle(item.url || '');
-        const displayTitle = formatProductTitle(rawTitle);
+        const catObj = getSelectedCategoryObj();
+        if (catObj && Array.isArray(catObj.subcategories) && catObj.subcategories.length > 0) {
+            catObj.subcategories.forEach(sub => {
+                const opt = document.createElement('option');
+                opt.value = sub.slug;
+                opt.textContent = sub.name;
+                filterBrand.appendChild(opt);
+            });
+        }
 
-        let stockBannerHtml = '';
-        let actionHtml = '';
-
-        if (inStock) {
-            const isLow = item.stock_quantity <= 3;
-            const bannerClass = isLow ? 'stock-banner--low' : 'stock-banner--in';
-            const icon = isLow ? 'fa-bolt' : 'fa-circle-check';
-            const statusLabel = isLow ? 'Low Stock' : 'In Stock';
-            const qtyText = isLow ? `Only ${item.stock_quantity} left` : `${Number(item.stock_quantity).toLocaleString()} available`;
-
-            stockBannerHtml = `
-                <div class="stock-banner ${bannerClass}">
-                    <div class="stock-banner__status">
-                        <i class="fa-solid ${icon}"></i>
-                        <span>${statusLabel}</span>
-                    </div>
-                    <div class="stock-banner__qty">
-                        <span class="stock-banner__count">${qtyText}</span>
-                    </div>
-                </div>
-            `;
-
-            actionHtml = `
-                <a href="${escapeHtml(item.url || '#')}" target="_blank" class="cta-btn cta-btn--primary" rel="noopener" title="Buy on Karz and Dolls">
-                    <i class="fa-solid fa-cart-shopping"></i> Buy on Karz &amp; Dolls
-                </a>
-                <button type="button" class="card-icon-btn copy-link-btn" title="Copy product link">
-                    <i class="fa-regular fa-clone"></i>
-                </button>
-            `;
-        } else if (outOfStock) {
-            stockBannerHtml = `
-                <div class="stock-banner stock-banner--out">
-                    <div class="stock-banner__status">
-                        <i class="fa-solid fa-circle-xmark"></i>
-                        <span>Out of Stock</span>
-                    </div>
-                    <div class="stock-banner__qty">
-                        <span class="stock-banner__count">0 available</span>
-                    </div>
-                </div>
-            `;
-            actionHtml = `
-                <a href="${escapeHtml(item.url || '#')}" target="_blank" class="cta-btn cta-btn--ghost" rel="noopener" title="View product on Karz and Dolls">
-                    <i class="fa-solid fa-arrow-up-right-from-square"></i> View on Site
-                </a>
-                <button type="button" class="card-icon-btn copy-link-btn" title="Copy product link">
-                    <i class="fa-regular fa-clone"></i>
-                </button>
-            `;
+        const hasPrevious = !forceSelectFirst && Array.from(filterBrand.options).some(o => o.value === previousBrand);
+        if (hasPrevious) {
+            filterBrand.value = previousBrand;
+        } else if (filterBrand.options.length > 0) {
+            filterBrand.value = filterBrand.options[0].value;
         } else {
-            const rawError = item.message || 'Lookup Failed';
-            let displayBadgeText = 'Lookup Failed';
-            let iconClass = 'fa-triangle-exclamation';
+            filterBrand.value = '';
+        }
+        catalogState.brand = filterBrand.value;
+    }
 
-            const lower = rawError.toLowerCase();
-            if (lower.includes('timed out') || lower.includes('timeout') || lower.includes('curl: (28)')) {
-                displayBadgeText = 'Timed Out';
-                iconClass = 'fa-clock';
-            } else if (lower.includes('rate limit') || lower.includes('429')) {
-                displayBadgeText = 'Rate Limited';
-                iconClass = 'fa-hand';
-            } else if (lower.includes('404')) {
-                displayBadgeText = 'Not Found (404)';
-                iconClass = 'fa-circle-xmark';
+    function populateSubcategoryDropdown(forceSelectFirst = false) {
+        if (!filterSubcategory) return;
+        const previousSub = filterSubcategory.value;
+        filterSubcategory.innerHTML = '';
+
+        const catObj = getSelectedCategoryObj();
+        const brandSlug = filterBrand ? filterBrand.value : '';
+
+        if (catObj && brandSlug) {
+            const brandObj = (catObj.subcategories || []).find(s => s.slug === brandSlug);
+            if (brandObj) {
+                if (Array.isArray(brandObj.series) && brandObj.series.length > 0) {
+                    brandObj.series.forEach(ser => {
+                        const opt = document.createElement('option');
+                        opt.value = ser.slug || brandSlug;
+                        opt.textContent = ser.name;
+                        filterSubcategory.appendChild(opt);
+                    });
+                }
+                if (filterSubcategory.options.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.value = brandObj.slug || brandSlug;
+                    opt.textContent = brandObj.name;
+                    filterSubcategory.appendChild(opt);
+                }
             }
-
-            stockBannerHtml = `
-                <div class="stock-banner stock-banner--error" title="${escapeHtml(rawError)}">
-                    <div class="stock-banner__status">
-                        <i class="fa-solid ${iconClass}"></i>
-                        <span>${escapeHtml(displayBadgeText)}</span>
-                    </div>
-                    <div class="stock-banner__qty">
-                        <span class="stock-banner__count">Check Failed</span>
-                    </div>
-                </div>
-            `;
-            actionHtml = `
-                <button type="button" class="card-retry-btn" title="Retry this item">
-                    <i class="fa-solid fa-rotate-right"></i> Retry
-                </button>
-                <a href="${escapeHtml(item.url || '#')}" target="_blank" class="cta-btn cta-btn--ghost" rel="noopener" title="Open product page">
-                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open
-                </a>
-            `;
         }
 
-        const imgHtml = item.image
-            ? `<img src="${escapeHtml(item.image)}" class="card-showcase-img" alt="${escapeHtml(displayTitle)}" loading="lazy" />`
-            : `<div class="card-showcase-placeholder"><i class="fa-solid ${isError ? 'fa-triangle-exclamation' : 'fa-car'}"></i></div>`;
+        const hasPrevious = !forceSelectFirst && Array.from(filterSubcategory.options).some(o => o.value === previousSub);
+        if (hasPrevious) {
+            filterSubcategory.value = previousSub;
+        } else if (filterSubcategory.options.length > 0) {
+            filterSubcategory.value = filterSubcategory.options[0].value;
+        } else {
+            filterSubcategory.value = '';
+        }
+        catalogState.subcategory = filterSubcategory.value;
+    }
 
-        const priceHtml = item.price ? `<div class="floating-price-tag">${escapeHtml(item.price)}</div>` : '';
+    // Filter event listeners
+    if (filterCategory) {
+        filterCategory.addEventListener('change', () => {
+            catalogState.category = filterCategory.value;
+            populateBrandDropdown(true);
+            populateSubcategoryDropdown(true);
+            catalogState.page = 1;
+            fetchCatalog();
+        });
+    }
+
+    if (filterBrand) {
+        filterBrand.addEventListener('change', () => {
+            catalogState.brand = filterBrand.value;
+            populateSubcategoryDropdown(true);
+            catalogState.page = 1;
+            fetchCatalog();
+        });
+    }
+
+    if (filterSubcategory) {
+        filterSubcategory.addEventListener('change', () => {
+            catalogState.subcategory = filterSubcategory.value;
+            catalogState.page = 1;
+            fetchCatalog();
+        });
+    }
+
+    if (catalogSortSelect) {
+        catalogSortSelect.addEventListener('change', () => {
+            catalogState.sort = catalogSortSelect.value;
+            catalogState.page = 1;
+            fetchCatalog();
+        });
+    }
+
+    if (filterResetBtn) {
+        filterResetBtn.addEventListener('click', () => {
+            resetCatalogFilters();
+        });
+    }
+
+    if (catalogEmptyResetBtn) {
+        catalogEmptyResetBtn.addEventListener('click', () => {
+            resetCatalogFilters();
+        });
+    }
+
+    function resetCatalogFilters() {
+        if (filterCategory) filterCategory.value = 'cars';
+        catalogState.category = 'cars';
+        populateBrandDropdown(true);
+        populateSubcategoryDropdown(true);
+        if (catalogSortSelect) catalogSortSelect.value = 'latest';
+        catalogState.sort = 'latest';
+        if (catalogSearchInput) catalogSearchInput.value = '';
+        if (catalogClearSearch) catalogClearSearch.classList.add('hidden');
+        catalogState.search = '';
+        catalogState.page = 1;
+        fetchCatalog();
+    }
+
+    if (catalogRefreshBtn) {
+        catalogRefreshBtn.addEventListener('click', () => {
+            fetchCatalog();
+        });
+    }
+
+    // =========================================================================
+    // SEARCH & DIRECT LINK PASTING
+    // =========================================================================
+    if (catalogSearchInput) {
+        catalogSearchInput.addEventListener('input', () => {
+            const hasVal = Boolean(catalogSearchInput.value.trim());
+            if (catalogClearSearch) catalogClearSearch.classList.toggle('hidden', !hasVal);
+        });
+
+        catalogSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSearchOrLookup();
+            }
+        });
+    }
+
+    if (catalogClearSearch) {
+        catalogClearSearch.addEventListener('click', () => {
+            catalogSearchInput.value = '';
+            catalogClearSearch.classList.add('hidden');
+            catalogState.search = '';
+            catalogState.page = 1;
+            fetchCatalog();
+        });
+    }
+
+    if (catalogSearchBtn) {
+        catalogSearchBtn.addEventListener('click', () => {
+            handleSearchOrLookup();
+        });
+    }
+
+    async function handleSearchOrLookup() {
+        const query = (catalogSearchInput ? catalogSearchInput.value : '').trim();
+        if (!query) {
+            catalogState.search = '';
+            catalogState.page = 1;
+            fetchCatalog();
+            return;
+        }
+
+        // Case 1: Pasted direct product link
+        if (query.includes('/details/') || query.includes('karzanddolls.com/details/')) {
+            await lookupSingleDirectLink(query);
+            return;
+        }
+
+        // Case 2: Pasted category / lineup link (e.g. karzanddolls.com/mini-gt/kaido-house)
+        if (query.includes('karzanddolls.com/')) {
+            try {
+                const u = new URL(query.startsWith('http') ? query : `https://${query}`);
+                const parts = u.pathname.split('/').filter(Boolean);
+                if (parts.length >= 1) {
+                    const candidateBrand = parts[0];
+                    const candidateSub = parts[1] || '';
+
+                    // Try to match in dropdowns
+                    if (filterBrand) {
+                        const opt = Array.from(filterBrand.options).find(o => o.value.toLowerCase() === candidateBrand.toLowerCase());
+                        if (opt) {
+                            filterBrand.value = opt.value;
+                            catalogState.brand = opt.value;
+                            populateSubcategoryDropdown();
+                        }
+                    }
+                    if (candidateSub && filterSubcategory) {
+                        const subOpt = Array.from(filterSubcategory.options).find(o => o.value.toLowerCase() === candidateSub.toLowerCase());
+                        if (subOpt) {
+                            filterSubcategory.value = subOpt.value;
+                            catalogState.subcategory = subOpt.value;
+                        }
+                    }
+                    catalogState.search = '';
+                    catalogState.page = 1;
+                    fetchCatalog();
+                    showToast(`Loaded collection: ${candidateBrand}${candidateSub ? ' / ' + candidateSub : ''}`, 'info');
+                    return;
+                }
+            } catch { }
+        }
+
+        // Case 3: Keyword search
+        catalogState.search = query;
+        catalogState.page = 1;
+        fetchCatalog();
+    }
+
+    async function lookupSingleDirectLink(targetUrl) {
+        if (document.body.classList.contains('not-authenticated')) {
+            showAuthGate();
+            return;
+        }
+        if (catalogGrid) {
+            const currentH = catalogGrid.offsetHeight;
+            if (currentH > 200) catalogGrid.style.minHeight = `${currentH}px`;
+        }
+        if (searchSpinner) searchSpinner.classList.remove('hidden');
+        const searchIcon = catalogSearchBtn ? catalogSearchBtn.querySelector('.btn-icon') : null;
+        if (searchIcon) searchIcon.classList.add('hidden');
+        if (catalogSearchBtn) catalogSearchBtn.disabled = true;
+        if (catalogLoading) catalogLoading.classList.remove('hidden');
+        if (catalogGrid) catalogGrid.innerHTML = '';
+        if (catalogPagination) catalogPagination.innerHTML = '';
+
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/check-stock?url=${encodeURIComponent(targetUrl)}`, {
+                credentials: 'include',
+                headers: getAuthHeaders()
+            });
+            if (res.status === 401) {
+                handleApiUnauthorized();
+                return;
+            }
+            const data = await res.json();
+            if (catalogLoading) catalogLoading.classList.add('hidden');
+
+            if (data) {
+                const product = {
+                    product_name: data.product_name || parseUrlTitle(targetUrl),
+                    url: targetUrl,
+                    stock_quantity: data.stock_quantity || 0,
+                    in_stock: Boolean(data.stock_quantity > 0),
+                    price: '',
+                    numeric_price: 0.0,
+                    image: data.image || '',
+                    brand: '',
+                    subcategory: ''
+                };
+                catalogGrid.appendChild(createProductCard(product));
+                if (catalogCountText) catalogCountText.textContent = `Showing 1 direct product lookup`;
+                showToast(`Live stock count: ${data.stock_quantity}`, 'success');
+            } else {
+                if (catalogEmpty) catalogEmpty.classList.remove('hidden');
+            }
+        } catch {
+            showToast('Failed to lookup product URL', 'error');
+            if (catalogLoading) catalogLoading.classList.add('hidden');
+            if (catalogEmpty) catalogEmpty.classList.remove('hidden');
+        } finally {
+            if (catalogGrid) catalogGrid.style.minHeight = '';
+            if (searchSpinner) searchSpinner.classList.add('hidden');
+            if (searchIcon) searchIcon.classList.remove('hidden');
+            if (catalogSearchBtn) catalogSearchBtn.disabled = false;
+        }
+    }
+
+    // =========================================================================
+    // CATALOG FETCHER & RENDERER
+    // =========================================================================
+    async function fetchCatalog() {
+        if (document.body.classList.contains('not-authenticated')) {
+            showAuthGate();
+            return;
+        }
+        if (catalogState.loading) return;
+        catalogState.loading = true;
+
+        if (catalogGrid) {
+            const currentH = catalogGrid.offsetHeight;
+            if (currentH > 200) catalogGrid.style.minHeight = `${currentH}px`;
+        }
+
+        if (catalogLoading) catalogLoading.classList.remove('hidden');
+        if (catalogEmpty) catalogEmpty.classList.add('hidden');
+        if (catalogGrid) catalogGrid.innerHTML = '';
+        if (catalogPagination) catalogPagination.innerHTML = '';
+        if (searchSpinner) searchSpinner.classList.remove('hidden');
+        const searchIcon = catalogSearchBtn ? catalogSearchBtn.querySelector('.btn-icon') : null;
+        if (searchIcon) searchIcon.classList.add('hidden');
+        if (catalogSearchBtn) catalogSearchBtn.disabled = true;
+
+        updateActiveFilterTags();
+
+        const params = new URLSearchParams({
+            category: catalogState.category,
+            brand: catalogState.brand,
+            subcategory: catalogState.subcategory === 'all' ? '' : catalogState.subcategory,
+            search: catalogState.search,
+            sort: catalogState.sort,
+            page: catalogState.page,
+            limit: catalogState.limit
+        });
+
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/catalog?${params.toString()}`, {
+                credentials: 'include',
+                headers: getAuthHeaders()
+            });
+
+            if (res.status === 401) {
+                handleApiUnauthorized();
+                return;
+            }
+
+            const data = await res.json();
+            if (catalogLoading) catalogLoading.classList.add('hidden');
+
+            if (data.success && Array.isArray(data.products) && data.products.length > 0) {
+                catalogState.totalPages = data.total_pages || 1;
+                catalogState.totalCount = data.total || data.products.length;
+
+                renderCatalogGrid(data.products);
+                renderPagination(data.page, data.total_pages, data.total);
+
+                const startIdx = (data.page - 1) * catalogState.limit + 1;
+                const endIdx = Math.min(startIdx + data.products.length - 1, data.total);
+                if (catalogCountText) {
+                    catalogCountText.textContent = `Showing ${startIdx}–${endIdx} of ${data.total} products`;
+                }
+            } else {
+                if (catalogEmpty) catalogEmpty.classList.remove('hidden');
+                if (catalogCountText) catalogCountText.textContent = `0 products found`;
+            }
+        } catch (err) {
+            console.error(err);
+            if (catalogLoading) catalogLoading.classList.add('hidden');
+            if (catalogEmpty) catalogEmpty.classList.remove('hidden');
+            showToast('Network error while connecting to catalog.', 'error');
+        } finally {
+            catalogState.loading = false;
+            if (catalogGrid) catalogGrid.style.minHeight = '';
+            if (searchSpinner) searchSpinner.classList.add('hidden');
+            if (searchIcon) searchIcon.classList.remove('hidden');
+            if (catalogSearchBtn) catalogSearchBtn.disabled = false;
+        }
+    }
+
+    function updateActiveFilterTags() {
+        if (!catalogActiveFilterTags) return;
+        catalogActiveFilterTags.innerHTML = '';
+
+        if (catalogState.search) {
+            const tag = document.createElement('span');
+            tag.className = 'catalog-filter-tag catalog-filter-tag--search';
+            tag.innerHTML = `Search: "${escapeHtml(catalogState.search)}" <i class="fa-solid fa-xmark"></i>`;
+            tag.title = 'Click to clear search';
+            tag.addEventListener('click', () => {
+                if (catalogSearchInput) catalogSearchInput.value = '';
+                if (catalogClearSearch) catalogClearSearch.classList.add('hidden');
+                catalogState.search = '';
+                catalogState.page = 1;
+                fetchCatalog();
+            });
+            catalogActiveFilterTags.appendChild(tag);
+        }
+
+        if (catalogState.brand && catalogState.brand !== 'all') {
+            const tag = document.createElement('span');
+            tag.className = 'catalog-filter-tag';
+            const brandName = filterBrand?.options[filterBrand.selectedIndex]?.textContent || catalogState.brand;
+            tag.textContent = `Brand: ${brandName}`;
+            catalogActiveFilterTags.appendChild(tag);
+        }
+
+        if (catalogState.subcategory && catalogState.subcategory !== 'all') {
+            const tag = document.createElement('span');
+            tag.className = 'catalog-filter-tag';
+            const subName = filterSubcategory?.options[filterSubcategory.selectedIndex]?.textContent || catalogState.subcategory;
+            tag.textContent = `Lineup: ${subName}`;
+            catalogActiveFilterTags.appendChild(tag);
+        }
+    }
+
+    function renderCatalogGrid(products) {
+        if (!catalogGrid) return;
+        catalogGrid.innerHTML = '';
+        products.forEach(p => {
+            catalogGrid.appendChild(createProductCard(p));
+        });
+        updateAllCardStarStates();
+    }
+
+    function createProductCard(product) {
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.setAttribute('data-url', product.url);
+
+        const inStock = product.stock_quantity > 0;
+        const isLow = inStock && product.stock_quantity <= 3;
+        const bannerClass = inStock ? (isLow ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
+        const statusLabel = inStock ? (isLow ? 'Low Stock' : 'In Stock') : 'Out of Stock';
+        const icon = inStock ? (isLow ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
+        const qtyText = inStock ? (isLow ? `Only ${product.stock_quantity} left` : `${Number(product.stock_quantity).toLocaleString()} available`) : '0 available';
+
+        const watchlistItem = getWatchlist().find(w => w.url === product.url);
+        const isRestocked = watchlistItem && watchlistItem.prev_stock === 0 && product.stock_quantity > 0;
+        const restockTag = isRestocked ? '<span class="restock-badge"><i class="fa-solid fa-sparkles"></i> Restocked!</span>' : '';
+
+        const priceHtml = product.price ? `<div class="floating-price-tag">${escapeHtml(product.price)}</div>` : '';
+        const imgHtml = product.image
+            ? `<img src="${escapeHtml(product.image)}" class="card-showcase-img" alt="${escapeHtml(product.product_name)}" loading="lazy" />`
+            : `<div class="card-showcase-placeholder"><i class="fa-solid fa-car"></i></div>`;
+
+        const saved = isWatchlisted(product.url);
 
         card.innerHTML = `
             <div class="card-showcase">
@@ -908,205 +1248,166 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${imgHtml}
             </div>
             <div class="card-details">
-                <div class="card-title" title="${escapeHtml(rawTitle)}">${escapeHtml(displayTitle)}</div>
-                ${stockBannerHtml}
+                <div class="card-title" title="${escapeHtml(product.product_name)}">${escapeHtml(formatProductTitle(product.product_name))}</div>
+                <div class="stock-banner ${bannerClass}">
+                    <div class="stock-banner__status">
+                        <i class="fa-solid ${icon}"></i>
+                        <span>${statusLabel}</span>
+                        ${restockTag}
+                    </div>
+                    <div class="stock-banner__qty">
+                        <span class="stock-banner__count">${qtyText}</span>
+                    </div>
+                </div>
             </div>
             <div class="card-footer">
-                ${actionHtml}
+                <a href="${escapeHtml(product.url)}" target="_blank" class="cta-btn ${inStock ? 'cta-btn--primary' : 'cta-btn--ghost'}" rel="noopener" title="Open on Karz and Dolls">
+                    <i class="fa-solid ${inStock ? 'fa-cart-shopping' : 'fa-arrow-up-right-from-square'}"></i> ${inStock ? 'Buy on Store' : 'View on Store'}
+                </a>
+                <button type="button" class="card-icon-btn card-star-btn ${saved ? 'is-active' : ''}" title="${saved ? 'Remove from Watchlist' : 'Save to Watchlist'}">
+                    <i class="${saved ? 'fa-solid' : 'fa-regular'} fa-bookmark"></i>
+                </button>
+                <button type="button" class="card-icon-btn copy-link-btn" title="Copy direct link">
+                    <i class="fa-regular fa-clone"></i>
+                </button>
             </div>
         `;
 
-        const retryBtn = card.querySelector('.card-retry-btn');
-        if (retryBtn) {
-            retryBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                retrySingleCard(item.url, card);
-            });
-        }
+        // Star Bookmark Button
+        const starBtn = card.querySelector('.card-star-btn');
+        starBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const added = toggleWatchlistItem(product);
+            showToast(added ? 'Added to Watchlist ⭐' : 'Removed from Watchlist', added ? 'success' : 'info');
+        });
 
+        // Copy Link Button
         const copyBtn = card.querySelector('.copy-link-btn');
-        if (copyBtn) {
-            copyBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (!item.url) return;
-                try {
-                    await navigator.clipboard.writeText(item.url);
-                    showToast('Product link copied to clipboard!', 'success');
-                    copyBtn.innerHTML = '<i class="fa-solid fa-check" style="color:var(--emerald-light);"></i>';
-                    setTimeout(() => {
-                        copyBtn.innerHTML = '<i class="fa-regular fa-clone"></i>';
-                    }, 1500);
-                } catch {
-                    showToast('Failed to copy to clipboard', 'error');
-                }
-            });
-        }
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(product.url);
+                showToast('Product link copied to clipboard!', 'success');
+            }
+        });
 
         return card;
     }
 
-    async function retrySingleCard(targetUrl, cardElement) {
-        const retryBtn = cardElement.querySelector('.card-retry-btn');
-        if (retryBtn) {
-            retryBtn.disabled = true;
-            retryBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Retrying…';
-        }
-        try {
-            let data = null;
-            for (let attempt = 0; attempt < 2; attempt++) {
-                try {
-                    const res = await fetch(`${BACKEND_URL}/api/check-stock?url=${encodeURIComponent(targetUrl)}`);
-                    if (!res.ok) {
-                        let errMsg = `HTTP ${res.status}`;
-                        try {
-                            const errJson = await res.json();
-                            errMsg = errJson.error || errJson.detail || errJson.message || errMsg;
-                        } catch { }
-                        data = {
-                            url: targetUrl,
-                            product_name: parseUrlTitle(targetUrl),
-                            stock_quantity: 0,
-                            success: false,
-                            message: errMsg
-                        };
-                    } else {
-                        data = await res.json();
-                        data.url = targetUrl;
-                        if (!data.product_name || data.product_name === 'Unknown' || data.product_name.trim() === '') {
-                            data.product_name = parseUrlTitle(targetUrl);
-                        }
-                    }
-                } catch (err) {
-                    data = {
-                        url: targetUrl,
-                        product_name: parseUrlTitle(targetUrl),
-                        stock_quantity: 0,
-                        success: false,
-                        message: err.message || 'Network connection failed'
-                    };
-                }
+    function renderPagination(currentPage, totalPages, totalCount) {
+        if (!catalogPagination) return;
+        catalogPagination.innerHTML = '';
 
-                if (data && data.success) break;
-                if (attempt === 0) await new Promise(r => setTimeout(r, 600));
+        if (totalPages <= 1) return;
+
+        // Previous button
+        const prevBtn = document.createElement('button');
+        prevBtn.type = 'button';
+        prevBtn.className = 'page-btn';
+        prevBtn.innerHTML = '<i class="fa-solid fa-chevron-left"></i>';
+        prevBtn.disabled = currentPage <= 1;
+        prevBtn.title = 'Previous Page';
+        prevBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                catalogState.page = currentPage - 1;
+                fetchCatalog();
+                window.scrollTo({ top: catalogView.offsetTop - 20, behavior: 'smooth' });
             }
-
-            const idx = resultsData.findIndex(d => d.url === targetUrl);
-            if (idx > -1) {
-                resultsData[idx] = data;
-            } else {
-                resultsData.push(data);
-            }
-
-            const newCard = createResultCard(data);
-            cardElement.replaceWith(newCard);
-            updateFilterCounts();
-            showToast(data.success ? 'Stock updated successfully' : 'Retry completed', data.success ? 'success' : 'info');
-        } catch (err) {
-            if (retryBtn) {
-                retryBtn.disabled = false;
-                retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry';
-            }
-        }
-    }
-
-    if (retryFailedBtn) {
-        retryFailedBtn.addEventListener('click', async () => {
-            const failedItems = resultsData.filter(d => !d.success);
-            if (failedItems.length === 0) return;
-            const failedUrls = failedItems.map(d => d.url);
-            showToast(`Retrying ${failedUrls.length} failed item(s)…`, 'info');
-            await runBatchQueue(failedUrls, false);
         });
-    }
+        catalogPagination.appendChild(prevBtn);
 
-
-
-    function updateProgress() {
-        const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-        progressBarFill.style.width = `${pct}%`;
-        progressText.textContent = `${completedCount} / ${totalCount}`;
-    }
-
-    function setLoading(isLoading) {
-        if (isLoading) {
-            submitBtn.disabled = true;
-            btnLoader.classList.remove('hidden');
-            submitBtn.querySelector('.btn__text').textContent = 'Checking…';
-            submitBtn.querySelector('.btn__icon').classList.add('hidden');
+        // Page number pills with smart ellipsis
+        const pages = [];
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
         } else {
-            submitBtn.disabled = false;
-            btnLoader.classList.add('hidden');
-            submitBtn.querySelector('.btn__text').textContent = 'Check Stock';
-            submitBtn.querySelector('.btn__icon').classList.remove('hidden');
+            pages.push(1);
+            if (currentPage > 3) pages.push('...');
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+            for (let i = start; i <= end; i++) pages.push(i);
+            if (currentPage < totalPages - 2) pages.push('...');
+            pages.push(totalPages);
         }
-    }
 
-    function showNotification(msg) {
-        notificationMsg.textContent = msg;
-        notificationArea.classList.remove('hidden');
-    }
-
-    function hideNotification() {
-        notificationArea.classList.add('hidden');
-    }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    document.querySelectorAll('.pill-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            activeFilter = btn.dataset.filter;
-            filterResults();
-        });
-    });
-
-    if (filterInput) {
-        filterInput.addEventListener('input', filterResults);
-    }
-
-    if (sortSelect) {
-        sortSelect.addEventListener('change', filterResults);
-    }
-
-    function filterResults() {
-        const query = filterInput ? filterInput.value.toLowerCase().trim() : '';
-        const sortVal = sortSelect ? sortSelect.value : 'default';
-
-        let filtered = resultsData.filter(item => {
-            const name = (item.product_name || parseUrlTitle(item.url || '')).toLowerCase();
-            const matchesQuery = !query || name.includes(query);
-            if (!matchesQuery) return false;
-
-            if (activeFilter === 'instock') return item.success && item.stock_quantity > 0;
-            if (activeFilter === 'outofstock') return item.success && item.stock_quantity === 0;
-            if (activeFilter === 'error') return !item.success;
-            return true;
+        pages.forEach(p => {
+            if (p === '...') {
+                const ell = document.createElement('span');
+                ell.className = 'page-ellipsis';
+                ell.textContent = '…';
+                catalogPagination.appendChild(ell);
+            } else {
+                const pBtn = document.createElement('button');
+                pBtn.type = 'button';
+                pBtn.className = `page-btn ${p === currentPage ? 'active' : ''}`;
+                pBtn.textContent = p;
+                pBtn.addEventListener('click', () => {
+                    if (p !== currentPage) {
+                        catalogState.page = p;
+                        fetchCatalog();
+                        window.scrollTo({ top: catalogView.offsetTop - 20, behavior: 'smooth' });
+                    }
+                });
+                catalogPagination.appendChild(pBtn);
+            }
         });
 
-        if (sortVal === 'qty-desc') {
-            filtered.sort((a, b) => (b.stock_quantity || 0) - (a.stock_quantity || 0));
-        } else if (sortVal === 'qty-asc') {
-            filtered.sort((a, b) => (a.stock_quantity || 0) - (b.stock_quantity || 0));
-        } else if (sortVal === 'name-asc') {
-            filtered.sort((a, b) => {
-                const nameA = a.product_name || parseUrlTitle(a.url || '');
-                const nameB = b.product_name || parseUrlTitle(b.url || '');
-                return nameA.localeCompare(nameB);
+        // Next button
+        const nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.className = 'page-btn';
+        nextBtn.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+        nextBtn.disabled = currentPage >= totalPages;
+        nextBtn.title = 'Next Page';
+        nextBtn.addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                catalogState.page = currentPage + 1;
+                fetchCatalog();
+                window.scrollTo({ top: catalogView.offsetTop - 20, behavior: 'smooth' });
+            }
+        });
+        catalogPagination.appendChild(nextBtn);
+    }
+
+    // =========================================================================
+    // INITIALIZATION
+    // =========================================================================
+    let isAppInitialized = false;
+
+    async function initApp() {
+        if (isAppInitialized) return;
+        isAppInitialized = true;
+        updateWatchlistBadge();
+        await fetchCategoriesTree();
+        await fetchCatalog();
+    }
+
+    // Launch initial setup with strict authentication verification
+    async function startApplication() {
+        const token = getAuthToken();
+        if (!token) {
+            enforceUnauthenticated();
+            return;
+        }
+
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/auth-status`, {
+                credentials: 'include',
+                headers: getAuthHeaders()
             });
+            const data = await res.json();
+            if (res.ok && data.authenticated) {
+                enforceAuthenticated();
+                initApp();
+            } else {
+                enforceUnauthenticated();
+            }
+        } catch {
+            // If network failure on auth check, permit local token and let subsequent API calls validate
+            enforceAuthenticated();
+            initApp();
         }
-
-        resultsGrid.innerHTML = '';
-        filtered.forEach(item => {
-            resultsGrid.appendChild(createResultCard(item));
-        });
     }
+
+    startApplication();
 });

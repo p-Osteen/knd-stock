@@ -11,11 +11,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/fontawesome.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/solid.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/regular.min.css">
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css?v=9">
     <style>
+        body.not-authenticated .app-layout {
+            filter: blur(16px);
+            pointer-events: none;
+            user-select: none;
+            opacity: 0.35;
+            transition: filter 0.3s ease, opacity 0.3s ease;
+        }
+
+        body.not-authenticated .auth-gate-overlay {
+            display: flex !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        }
+
         .auth-gate-overlay {
             position: fixed !important;
             inset: 0 !important;
@@ -96,10 +109,11 @@
                 </div>
 
                 <div class="login-input-group">
-                    <input type="password" id="gate-password-input" class="login-input"
-                        placeholder="Enter password" autocomplete="current-password" required />
+                    <input type="password" id="gate-password-input" class="login-input" placeholder="Enter password"
+                        autocomplete="current-password" required />
                     <i class="fa-solid fa-key login-input-icon"></i>
-                    <button type="button" class="login-toggle-eye" id="gate-toggle-pw-btn" aria-label="Toggle password visibility">
+                    <button type="button" class="login-toggle-eye" id="gate-toggle-pw-btn"
+                        aria-label="Toggle password visibility">
                         <i class="fa-solid fa-eye" id="gate-toggle-pw-icon"></i>
                     </button>
                 </div>
@@ -137,181 +151,210 @@
                     </div>
                 </div>
 
+                <div class="header-nav-tabs" id="header-nav-tabs">
+                    <button type="button" class="header-nav-tab active" id="tab-catalog-btn"
+                        title="Live Product Catalog">
+                        <i class="fa-solid fa-car-side"></i>
+                        <span>Catalog</span>
+                    </button>
+                    <button type="button" class="header-nav-tab" id="tab-watchlist-btn" title="My Saved Watchlist">
+                        <i class="fa-solid fa-bookmark text-amber"></i>
+                        <span>Watchlist</span>
+                        <span class="header-pill-badge" id="watchlist-count-badge">0</span>
+                    </button>
+                </div>
+
                 <div class="header-quick-stats" id="header-quick-stats">
                     <div class="header-stat-pill">
-                        <i class="fa-solid fa-bolt text-accent"></i>
-                        <span>Instant Lookup</span>
-                    </div>
-                    <div class="header-stat-pill">
                         <i class="fa-solid fa-box-archive text-emerald"></i>
-                        <span>Live Stock Counts</span>
+                        <span>Live Engine</span>
                     </div>
                     <button type="button" class="header-lock-pill" id="logout-btn" title="Lock session">
                         <i class="fa-solid fa-lock text-accent"></i>
-                        <span>Lock</span>
+                        <span id="lock-btn-text">Lock</span>
                     </button>
                 </div>
             </div>
         </header>
 
         <main class="app-main">
-            <form id="check-form" class="super-form" autocomplete="off">
-                <div class="super-bar-card">
-                    <div class="super-bar-row">
-                        <div class="super-input-wrapper">
-                            <i class="fa-solid fa-magnifying-glass super-search-icon"></i>
-                            <input type="text" id="product-urls-input" class="super-input"
-                                placeholder="Search product name (e.g. Ronin, Skyline, Kaido) or paste Karz &amp; Dolls link…"
+            <!-- Screen 1: Interactive Live Catalog View -->
+            <section id="catalog-view" class="view-screen active">
+                <div class="catalog-search-card">
+                    <div class="catalog-search-row">
+                        <div class="catalog-search-input-wrap">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                            <input type="text" id="catalog-search-input" class="catalog-search-input"
+                                placeholder="Search diecast model name, brand (e.g. Skyline, Kaido, Inno64) or paste Karz &amp; Dolls link…"
                                 spellcheck="false" autocomplete="off" />
-                            <kbd class="input-kbd-hint">↵ Check</kbd>
-                            <div id="knd-search-dropdown" class="search-dropdown hidden">
-                                <div id="knd-search-results" class="search-dropdown-list"></div>
-                            </div>
+                            <button type="button" id="catalog-clear-search" class="clear-search-btn hidden"
+                                title="Clear query">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
                         </div>
-                        <button type="submit" id="submit-btn" class="super-btn">
-                            <span class="btn__text">Check Stock</span>
-                            <i class="fa-solid fa-bolt btn__icon"></i>
-                            <div class="btn__loader hidden" id="btn-loader"></div>
+                        <button type="button" id="catalog-search-btn" class="catalog-search-btn">
+                            <span class="btn-text">Lookup / Search</span>
+                            <i class="fa-solid fa-bolt btn-icon"></i>
+                            <div class="btn-spinner hidden" id="search-spinner"></div>
                         </button>
                     </div>
 
-                    <div class="batch-action-bar">
-                        <div class="batch-action-bar__left">
-                            <button type="button" id="toggle-batch-btn" class="batch-toggle-btn">
-                                <i class="fa-solid fa-layer-group"></i>
-                                <span id="batch-toggle-text">Multiple links queued (0)</span>
-                                <i class="fa-solid fa-chevron-down chevron-icon" id="batch-chevron"></i>
-                            </button>
+                    <!-- 3-Tier Category, Brand & Subcategory Filters + Sorting -->
+                    <div class="catalog-filter-bar">
+                        <div class="filter-group">
+                            <label class="filter-label" for="filter-category">Category</label>
+                            <select id="filter-category" class="filter-select">
+                                <option value="cars">Cars</option>
+                                <option value="action-figures-and-dolls">Action Figures</option>
+                                <option value="lego">Lego</option>
+                                <option value="books">Books</option>
+                                <option value="specials">Specials / Pre-Orders</option>
+                            </select>
                         </div>
-                        <div class="batch-action-bar__right">
-                            <button type="button" class="mini-tool-btn" id="paste-btn"
-                                title="Paste link from clipboard">
-                                <i class="fa-regular fa-clipboard"></i>
-                                <span>Paste Link</span>
-                            </button>
-                            <button type="button" class="mini-tool-btn" id="upload-btn"
-                                title="Upload CSV, TXT, or Excel list">
-                                <i class="fa-solid fa-file-arrow-up"></i>
-                                <span>Upload File</span>
-                            </button>
-                            <input type="file" id="file-upload-input" accept=".csv,.txt,.xlsx,.xls"
-                                style="display:none;" />
-                            <button type="button" id="clear-btn" class="mini-tool-btn mini-tool-btn--danger"
-                                title="Clear all queued links">
-                                <i class="fa-solid fa-trash-can"></i>
-                                <span>Clear</span>
-                            </button>
+
+                        <div class="filter-group">
+                            <label class="filter-label" for="filter-brand">Brand</label>
+                            <select id="filter-brand" class="filter-select"></select>
                         </div>
-                    </div>
 
-                    <div id="batch-panel" class="batch-panel hidden">
-                        <div class="url-chips-container" id="url-chips-container">
-                            <div class="url-chips-scroll" id="url-chips-scroll">
-                                <div class="url-chips-list" id="url-chips-list" role="listbox" aria-label="Added URLs">
-                                </div>
-                            </div>
-                            <div class="url-chips-footer">
-                                <span class="url-counter" id="url-counter">0 Links Queued</span>
-                                <span class="char-counter" id="char-counter">0 chars</span>
-                            </div>
+                        <div class="filter-group">
+                            <label class="filter-label" for="filter-subcategory">Subcategory / Lineup</label>
+                            <select id="filter-subcategory" class="filter-select"></select>
                         </div>
-                    </div>
-                </div>
 
-                <textarea id="product-urls" style="display:none;"></textarea>
-
-                <div id="notification-area" class="notification hidden">
-                    <i class="notification__icon fa-solid fa-circle-exclamation"></i>
-                    <span class="notification__msg" id="notification-msg"></span>
-                </div>
-            </form>
-
-            <section class="results-section">
-
-                <div class="results-header hidden" id="results-header">
-                    <div class="results-header__left">
-                        <h2 class="results-header__title">
-                            <i class="fa-solid fa-layer-group"></i>
-                            Stock Results
-                        </h2>
-                        <span class="results-header__count" id="results-count"></span>
-                    </div>
-                    <div class="results-header__actions">
-                        <div class="progress-indicator hidden" id="progress-indicator">
-                            <div class="progress-bar">
-                                <div class="progress-bar__fill" id="progress-bar-fill"></div>
-                            </div>
-                            <span class="progress-text" id="progress-text">0 / 0</span>
+                        <div class="filter-group filter-group--sort">
+                            <label class="filter-label" for="catalog-sort-select">Sort</label>
+                            <select id="catalog-sort-select" class="filter-select">
+                                <option value="latest">Latest First</option>
+                                <option value="oldest">Oldest First</option>
+                                <option value="price_low">Price: Low to High</option>
+                                <option value="price_high">Price: High to Low</option>
+                                <option value="stock_high">Stock: High to Low</option>
+                            </select>
                         </div>
-                        <button type="button" id="retry-failed-btn" class="action-btn action-btn--danger hidden"
-                            title="Retry failed lookups">
-                            <i class="fa-solid fa-rotate-right"></i>
-                            <span id="retry-failed-text">Retry Failed</span>
+
+                        <button type="button" id="filter-reset-btn" class="filter-reset-btn" title="Reset all filters">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span>Reset</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="toolbar-bar hidden" id="results-toolbar">
-                    <div class="toolbar-pills">
-                        <button type="button" class="pill-btn active" data-filter="all">
-                            <span>All</span> <span class="pill-badge" id="count-all">0</span>
-                        </button>
-                        <button type="button" class="pill-btn pill-btn--success" data-filter="instock">
-                            <i class="fa-solid fa-circle-check"></i> <span>In Stock</span> <span class="pill-badge"
-                                id="count-instock">0</span>
-                        </button>
-                        <button type="button" class="pill-btn pill-btn--ruby" data-filter="outofstock">
-                            <i class="fa-solid fa-circle-xmark"></i> <span>Out of Stock</span> <span class="pill-badge"
-                                id="count-outofstock">0</span>
-                        </button>
-                        <button type="button" class="pill-btn pill-btn--error" data-filter="error">
-                            <i class="fa-solid fa-triangle-exclamation"></i> <span>Failed</span> <span
-                                class="pill-badge" id="count-failed">0</span>
-                        </button>
+                <div class="catalog-status-row">
+                    <div class="catalog-status-info">
+                        <span class="catalog-count-badge" id="catalog-count-badge">
+                            <i class="fa-solid fa-boxes-stacked"></i>
+                            <span id="catalog-count-text">Loading catalog…</span>
+                        </span>
+                        <div class="catalog-filter-tags" id="catalog-active-filter-tags"></div>
                     </div>
-                    <div class="toolbar-controls">
-                        <div class="search-filter-box">
-                            <i class="fa-solid fa-magnifying-glass search-filter-icon"></i>
-                            <input type="text" id="results-filter-input" placeholder="Filter loaded items..."
-                                autocomplete="off" />
-                        </div>
-                        <select id="results-sort-select" class="sort-select">
-                            <option value="default">Sort: Default</option>
-                            <option value="qty-desc">Stock: High to Low</option>
-                            <option value="qty-asc">Stock: Low to High</option>
-                            <option value="name-asc">Name: A to Z</option>
-                        </select>
-                    </div>
+                    <button type="button" id="catalog-refresh-btn" class="catalog-refresh-btn"
+                        title="Refresh live catalog">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Refresh</span>
+                    </button>
                 </div>
 
-                <div class="empty-state-card" id="empty-state">
+                <div id="catalog-loading" class="catalog-loading-state hidden">
+                    <div class="spinner-large"></div>
+                    <h4>Fetching live items from Karz &amp; Dolls…</h4>
+                    <p>Retrieving real-time stock and prices directly from the store</p>
+                </div>
+
+                <div id="catalog-empty" class="empty-state-card hidden">
                     <div class="empty-state-orb">
                         <i class="fa-solid fa-car"></i>
                     </div>
-                    <h3 class="empty-state-title">Ready for Live Inventory Lookup</h3>
-                    <p class="empty-state-desc">Type any diecast model name, paste multiple Karz &amp; Dolls product
-                        links, or upload an export list to check live stock counts instantly.</p>
-                    <div class="empty-state-shortcuts">
-                        <div class="shortcut-chip"><i class="fa-solid fa-clipboard-check"></i> Paste multi-line links
+                    <h3 class="empty-state-title">No matching products found</h3>
+                    <p class="empty-state-desc">Try clearing your search query or selecting a different brand or lineup.
+                    </p>
+                    <button type="button" class="cta-btn cta-btn--primary" id="catalog-empty-reset-btn">
+                        <i class="fa-solid fa-rotate-left"></i> Reset Filters
+                    </button>
+                </div>
+
+                <div id="catalog-grid" class="catalog-grid"></div>
+
+                <div id="catalog-pagination" class="catalog-pagination"></div>
+            </section>
+
+            <!-- Screen 2: Dedicated Watchlist View (Separate Screen, No Popup) -->
+            <section id="watchlist-view" class="view-screen hidden">
+                <div class="screen-header">
+                    <div class="screen-header__left">
+                        <button type="button" id="watchlist-back-btn" class="action-back-btn" title="Return to Catalog">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <span>Catalog</span>
+                        </button>
+                        <div class="screen-header__title-wrap">
+                            <h2 class="screen-title">
+                                <i class="fa-solid fa-bookmark text-amber"></i> Saved Watchlist
+                            </h2>
+                            <span class="watchlist-count-tag" id="watchlist-total-count">0 items</span>
                         </div>
-                        <div class="shortcut-chip"><i class="fa-solid fa-bolt"></i> Auto live search</div>
-                        <div class="shortcut-chip"><i class="fa-solid fa-boxes-stacked"></i> Live inventory tracker
-                        </div>
+                    </div>
+
+                    <div class="screen-header__actions">
+                        <button type="button" class="cta-btn cta-btn--emerald" id="watchlist-check-all-btn">
+                            <i class="fa-solid fa-bolt"></i>
+                            <span id="watchlist-check-btn-text">Check All Stock Now</span>
+                        </button>
+                        <button type="button" class="mini-tool-btn" id="watchlist-export-btn"
+                            title="Export watchlist to JSON file">
+                            <i class="fa-solid fa-file-export"></i>
+                            <span>Export JSON</span>
+                        </button>
+                        <button type="button" class="mini-tool-btn" id="watchlist-import-btn"
+                            title="Import watchlist from JSON file">
+                            <i class="fa-solid fa-file-import"></i>
+                            <span>Import JSON</span>
+                        </button>
+                        <input type="file" id="watchlist-file-input" accept=".json" style="display:none;" />
+                        <button type="button" class="mini-tool-btn mini-tool-btn--danger" id="watchlist-clear-all-btn"
+                            title="Clear all items">
+                            <i class="fa-solid fa-trash-can"></i>
+                            <span>Clear All</span>
+                        </button>
                     </div>
                 </div>
 
-                <div id="results-grid" class="results-grid"></div>
+                <div class="watchlist-toolbar-bar">
+                    <div class="search-filter-box" style="flex:1;">
+                        <i class="fa-solid fa-magnifying-glass search-filter-icon"></i>
+                        <input type="text" id="watchlist-filter-input" placeholder="Filter saved watchlist items..."
+                            autocomplete="off" />
+                    </div>
+                    <div class="watchlist-progress-wrap hidden" id="watchlist-progress-wrap">
+                        <div class="watchlist-progress-bar">
+                            <div class="watchlist-progress-fill" id="watchlist-progress-fill"></div>
+                        </div>
+                        <span class="watchlist-progress-text" id="watchlist-progress-text">0 / 0</span>
+                    </div>
+                </div>
+
+                <div id="watchlist-items-container" class="watchlist-items-container">
+                    <div id="watchlist-empty" class="watchlist-empty">
+                        <i class="fa-regular fa-bookmark"></i>
+                        <h4>Your watchlist is empty</h4>
+                        <p>Click the bookmark star on any catalog item or search result to pin it here for 1-click live
+                            stock checks.</p>
+                        <button type="button" class="cta-btn cta-btn--primary" id="watchlist-explore-btn">
+                            <i class="fa-solid fa-car-side"></i> Browse Live Catalog
+                        </button>
+                    </div>
+                    <div id="watchlist-list" class="watchlist-list"></div>
+                </div>
             </section>
         </main>
 
         <footer class="app-footer">
-            <p>Built for Karz and Dolls &bull; Live Inventory Engine &bull; Fast Diecast Lookups</p>
+            <p>Built for Karz and Dolls &bull; Live Inventory Engine &bull; Interactive Catalog</p>
         </footer>
     </div>
 
     <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
-    <script src="script.js?v=5"></script>
+    <script src="script.js?v=9"></script>
 </body>
 
 </html>
