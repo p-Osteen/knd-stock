@@ -136,6 +136,7 @@ class SearchItem(BaseModel):
     brand: str = ""
     subcategory: str = ""
     created_at: str = ""
+    product_id: int | None = None
 
 
 class SearchResponse(BaseModel):
@@ -298,57 +299,93 @@ def fetch_url(url: str, timeout: int = DEFAULT_TIMEOUT, max_retries: int = MAX_R
     raise last_exception
 
 
-def _get_stock_via_cart(product_id: int) -> int | None:
-    """
-    Get real stock count by temporarily adding item to a visitor cart.
-    KND hides pro_stock on product/listing pages but exposes it in
-    the visitor cart API response after an add-to-cart action.
-    Returns the stock count, or None if the trick fails.
-    """
-    vid = str(uuid.uuid4())
+_STOCK_CACHE: dict[int, tuple[int, float]] = {}
+STOCK_CACHE_TTL = 300  # 5 minutes
+
+
+def _add_single_to_cart(vid: str, pid: int, timeout: int = DEFAULT_TIMEOUT) -> bool:
     try:
-        add_r = session.post(
+        s = requests.Session(impersonate="chrome120")
+        r = s.post(
             "https://www.karzanddolls.com/karzOffice/api/cart/visitor/add",
-            json={"visitor_id": vid, "product_id": product_id, "quantity": 1},
+            json={"visitor_id": vid, "product_id": pid, "quantity": 1},
             headers={
                 **SESSION_HEADERS,
                 "Content-Type": "application/json",
                 "Origin": "https://www.karzanddolls.com",
                 "Referer": "https://www.karzanddolls.com/",
             },
-            timeout=DEFAULT_TIMEOUT,
+            timeout=timeout,
         )
-        if not add_r.ok:
-            return None
-        add_data = add_r.json()
-        if not add_data.get("success"):
-            msg = str(add_data.get("message", "")).lower()
-            if "stock" in msg or "unavailable" in msg or "sold" in msg:
-                return 0  # item is genuinely out of stock
-            return None
+        if not r.ok:
+            return False
+        return bool(r.json().get("success"))
+    except Exception:
+        return False
 
-        # Fetch visitor cart — response includes full product data with pro_stock
-        cart_r = session.get(
+
+def _get_batch_stock_via_cart(product_ids: list[int], timeout: int = DEFAULT_TIMEOUT) -> dict[int, int]:
+    """
+    Get real stock counts for a batch of products using a single temporary visitor cart.
+    KND hides pro_stock on listing and product detail pages until items are added to a cart.
+    Returns a dict mapping numeric product_id -> pro_stock count.
+    """
+    if not product_ids:
+        return {}
+
+    now = time.time()
+    results: dict[int, int] = {}
+    needed: list[int] = []
+
+    for pid in product_ids:
+        if pid in _STOCK_CACHE and (now - _STOCK_CACHE[pid][1] < STOCK_CACHE_TTL):
+            results[pid] = _STOCK_CACHE[pid][0]
+        else:
+            needed.append(pid)
+
+    if not needed:
+        return results
+
+    vid = str(uuid.uuid4())
+    workers = min(len(needed), 8)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(_add_single_to_cart, vid, pid, timeout) for pid in needed]
+        for f in futures:
+            try:
+                f.result()
+            except Exception:
+                pass
+
+    try:
+        s = requests.Session(impersonate="chrome120")
+        cart_r = s.get(
             f"https://www.karzanddolls.com/karzOffice/api/cart/visitor?visitor_id={vid}",
             headers={**SESSION_HEADERS, "Referer": "https://www.karzanddolls.com/"},
-            timeout=DEFAULT_TIMEOUT,
+            timeout=timeout,
         )
-        if not cart_r.ok:
-            return None
-        cart_data = cart_r.json()
-        if cart_data.get("success") and isinstance(cart_data.get("data"), list):
-            for entry in cart_data["data"]:
-                prod = entry.get("product") or {}
-                if prod.get("id") == product_id:
+        if cart_r.ok:
+            cart_data = cart_r.json()
+            if cart_data.get("success") and isinstance(cart_data.get("data"), list):
+                for entry in cart_data["data"]:
+                    prod = entry.get("product") or {}
+                    pid = prod.get("id")
                     val = prod.get("pro_stock")
-                    if val is not None:
+                    if pid is not None and val is not None:
                         try:
-                            return int(val)
+                            stock_int = int(val)
+                            results[pid] = stock_int
+                            _STOCK_CACHE[pid] = (stock_int, time.time())
                         except (ValueError, TypeError):
                             pass
-        return None
     except Exception:
-        return None
+        pass
+
+    return results
+
+
+def _get_stock_via_cart(product_id: int) -> int | None:
+    stocks = _get_batch_stock_via_cart([product_id])
+    return stocks.get(product_id)
 
 
 def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = "") -> SearchItem | None:
@@ -357,6 +394,14 @@ def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = 
     name = p.get("pro_name") or p.get("product_name") or p.get("title") or "Unknown Product"
     slug = p.get("slug", "")
     pid = p.get("pid", "")
+    numeric_id_raw = p.get("id")
+    product_id = None
+    if numeric_id_raw is not None:
+        try:
+            product_id = int(numeric_id_raw)
+        except (ValueError, TypeError):
+            pass
+
     raw_stock = p.get("pro_stock")
     has_stock_field = raw_stock is not None and str(raw_stock).strip() != ""
     stock = 0
@@ -368,8 +413,11 @@ def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = 
     in_stock_flag = p.get("in_stock")
     in_s = bool(int(in_stock_flag)) if in_stock_flag is not None else (stock > 0)
     if not has_stock_field and in_s:
-        # pro_stock not available on listing pages; use -1 sentinel for "in stock, qty unknown"
-        stock = -1
+        if product_id and product_id in _STOCK_CACHE and (time.time() - _STOCK_CACHE[product_id][1] < STOCK_CACHE_TTL):
+            stock = _STOCK_CACHE[product_id][0]
+        else:
+            # pro_stock not available on listing pages; use -1 sentinel for "in stock, qty unknown"
+            stock = -1
 
     price_val = p.get("dis_price") or p.get("act_price") or p.get("price") or ""
     numeric_price = 0.0
@@ -418,7 +466,8 @@ def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = 
         image=img_val,
         brand=brand,
         subcategory=subcat,
-        created_at=created_at
+        created_at=created_at,
+        product_id=product_id
     )
 
 
@@ -707,6 +756,11 @@ def get_catalog(
     end_idx = start_idx + limit
     page_products = sorted_items[start_idx:end_idx]
 
+    now_t = time.time()
+    for item in page_products:
+        if item.product_id and item.product_id in _STOCK_CACHE and (now_t - _STOCK_CACHE[item.product_id][1] < STOCK_CACHE_TTL):
+            item.stock_quantity = _STOCK_CACHE[item.product_id][0]
+
     return CatalogResponse(
         products=page_products,
         total=total,
@@ -716,6 +770,28 @@ def get_catalog(
         success=True,
         message=f"Fetched {len(page_products)} products."
     )
+
+
+@app.get("/api/batch-stock")
+@limiter.limit(RATE_LIMIT)
+def get_batch_stock(
+    request: Request,
+    ids: str = Query(..., description="Comma-separated numeric product IDs")
+):
+    if not check_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized. Please enter password.")
+
+    parsed_ids: list[int] = []
+    for part in ids.split(","):
+        part = part.strip()
+        if part.isdigit():
+            parsed_ids.append(int(part))
+
+    if not parsed_ids:
+        return {"success": True, "stocks": {}}
+
+    stocks = _get_batch_stock_via_cart(parsed_ids[:30])
+    return {"success": True, "stocks": stocks}
 
 
 
@@ -785,6 +861,7 @@ def check_stock(request: Request, url: str = Query(..., description="The product
             in_stock_flag = product_details.get("in_stock")
             in_stock_bool = bool(int(in_stock_flag)) if in_stock_flag is not None else False
 
+            numeric_id = product_details.get("id")
             if has_stock:
                 pro_stock = pro_stock_raw
                 if isinstance(pro_stock, str) and pro_stock.strip().isdigit():
@@ -793,9 +870,10 @@ def check_stock(request: Request, url: str = Query(..., description="The product
                     pro_stock = int(pro_stock)
                 else:
                     pro_stock = -1 if in_stock_bool else 0
+                if numeric_id and str(numeric_id).isdigit() and pro_stock >= 0:
+                    _STOCK_CACHE[int(numeric_id)] = (pro_stock, time.time())
             else:
                 # pro_stock hidden; use visitor cart trick to get real count
-                numeric_id = product_details.get("id")
                 if numeric_id:
                     cart_stock = _get_stock_via_cart(int(numeric_id))
                     if cart_stock is not None:

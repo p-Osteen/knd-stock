@@ -1214,6 +1214,77 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let activeBatchStockController = null;
+
+    function updateCatalogCardStock(card, stockQty) {
+        if (!card) return;
+        const inStock = stockQty > 0 || stockQty === -1;
+        const isLow = stockQty > 0 && stockQty <= 3;
+        const isUnknownQty = stockQty === -1;
+        const bannerClass = inStock ? (isLow ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
+        const statusLabel = inStock ? (isLow ? 'Low Stock' : 'In Stock') : 'Out of Stock';
+        const icon = inStock ? (isLow ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
+        const qtyText = inStock ? (isUnknownQty ? 'Available' : (isLow ? `Only ${stockQty} left` : `${Number(stockQty).toLocaleString()} available`)) : '0 available';
+
+        const banner = card.querySelector('.stock-banner');
+        if (banner) {
+            banner.className = `stock-banner ${bannerClass}`;
+            const statusDiv = banner.querySelector('.stock-banner__status');
+            if (statusDiv) {
+                const restockTag = banner.querySelector('.restock-badge');
+                const restockHtml = restockTag ? restockTag.outerHTML : '';
+                statusDiv.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${statusLabel}</span> ${restockHtml}`;
+            }
+            const countSpan = banner.querySelector('.stock-banner__count');
+            if (countSpan) {
+                countSpan.textContent = qtyText;
+            }
+        }
+
+        const ctaBtn = card.querySelector('.cta-btn');
+        if (ctaBtn) {
+            ctaBtn.className = `cta-btn ${inStock ? 'cta-btn--primary' : 'cta-btn--ghost'}`;
+            ctaBtn.innerHTML = `<i class="fa-solid ${inStock ? 'fa-cart-shopping' : 'fa-arrow-up-right-from-square'}"></i> ${inStock ? 'Buy on Store' : 'View on Store'}`;
+        }
+    }
+
+    async function resolveCatalogStockCounts(products) {
+        if (!Array.isArray(products) || !catalogGrid) return;
+        const unknownItems = products.filter(p => p.stock_quantity === -1 && p.product_id);
+        if (unknownItems.length === 0) return;
+
+        if (activeBatchStockController) {
+            activeBatchStockController.abort();
+        }
+        activeBatchStockController = new AbortController();
+
+        const ids = unknownItems.map(p => p.product_id).join(',');
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/batch-stock?ids=${ids}`, {
+                credentials: 'include',
+                headers: getAuthHeaders(),
+                signal: activeBatchStockController.signal
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.success && data.stocks) {
+                Object.entries(data.stocks).forEach(([pidStr, qty]) => {
+                    const pid = Number(pidStr);
+                    const item = products.find(p => p.product_id === pid);
+                    if (item) item.stock_quantity = qty;
+                    const card = catalogGrid.querySelector(`[data-product-id="${pid}"]`);
+                    if (card) {
+                        updateCatalogCardStock(card, qty);
+                    }
+                });
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                // Silently keep "Available" label
+            }
+        }
+    }
+
     function renderCatalogGrid(products) {
         if (!catalogGrid) return;
         catalogGrid.innerHTML = '';
@@ -1221,12 +1292,16 @@ document.addEventListener('DOMContentLoaded', () => {
             catalogGrid.appendChild(createProductCard(p));
         });
         updateAllCardStarStates();
+        resolveCatalogStockCounts(products);
     }
 
     function createProductCard(product) {
         const card = document.createElement('div');
         card.className = 'result-card';
         card.setAttribute('data-url', product.url);
+        if (product.product_id) {
+            card.setAttribute('data-product-id', product.product_id);
+        }
 
         const inStock = product.stock_quantity > 0 || product.stock_quantity === -1;
         const isLow = product.stock_quantity > 0 && product.stock_quantity <= 3;
