@@ -435,14 +435,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateWatchlistCardElement(card, item) {
         if (!card) return;
-        const inStock = item.last_stock > 0;
-        const isLow = inStock && item.last_stock <= 3;
-        const isRestocked = item.prev_stock === 0 && item.last_stock > 0;
+        const inStock = item.last_stock > 0 || item.last_stock === -1;
+        const isLow = item.last_stock > 0 && item.last_stock <= 3;
+        const isUnknownQty = item.last_stock === -1;
+        const isRestocked = item.prev_stock === 0 && inStock;
 
         const bannerClass = inStock ? (isLow ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
         const statusLabel = inStock ? (isLow ? 'Low Stock' : 'In Stock') : 'Out of Stock';
         const icon = inStock ? (isLow ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
-        const qtyText = inStock ? `${item.last_stock} available` : '0 available';
+        const qtyText = inStock ? (isUnknownQty ? 'Available' : `${item.last_stock} available`) : '0 available';
 
         const banner = card.querySelector('.stock-banner');
         if (banner) {
@@ -496,8 +497,9 @@ document.addEventListener('DOMContentLoaded', () => {
             card.className = 'result-card';
             card.setAttribute('data-url', item.url);
 
-            const inStock = item.last_stock > 0;
-            const isRestocked = item.prev_stock === 0 && item.last_stock > 0;
+            const inStock = item.last_stock > 0 || item.last_stock === -1;
+            const isUnknownQty = item.last_stock === -1;
+            const isRestocked = item.prev_stock === 0 && inStock;
 
             const imgHtml = item.image
                 ? `<img src="${escapeHtml(item.image)}" class="card-showcase-img" alt="${escapeHtml(item.product_name)}" loading="lazy" />`
@@ -505,10 +507,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const priceHtml = item.price ? `<div class="floating-price-tag">${escapeHtml(item.price)}</div>` : '';
 
-            const bannerClass = inStock ? (item.last_stock <= 3 ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
-            const statusLabel = inStock ? (item.last_stock <= 3 ? 'Low Stock' : 'In Stock') : 'Out of Stock';
-            const icon = inStock ? (item.last_stock <= 3 ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
-            const qtyText = inStock ? `${item.last_stock} available` : '0 available';
+            const bannerClass = inStock ? (item.last_stock > 0 && item.last_stock <= 3 ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
+            const statusLabel = inStock ? (item.last_stock > 0 && item.last_stock <= 3 ? 'Low Stock' : 'In Stock') : 'Out of Stock';
+            const icon = inStock ? (item.last_stock > 0 && item.last_stock <= 3 ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
+            const qtyText = inStock ? (isUnknownQty ? 'Available' : `${item.last_stock} available`) : '0 available';
             const restockTag = isRestocked ? '<span class="restock-badge"><i class="fa-solid fa-sparkles"></i> Restocked!</span>' : '';
 
             card.innerHTML = `
@@ -573,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // In-place DOM update prevents view shrinking/jumping
                         updateWatchlistCardElement(card, item);
-                        showToast(`Updated stock: ${data.stock_quantity} available`, 'success');
+                        showToast(data.stock_quantity === -1 ? 'In Stock (qty hidden by store)' : `Updated stock: ${data.stock_quantity} available`, 'success');
                     } else {
                         showToast(data.message || 'Lookup failed', 'error');
                     }
@@ -750,13 +752,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         const data = await res.json();
                         if (data.success) {
-                            if (item.last_stock === 0 && data.stock_quantity > 0) {
+                            if (item.last_stock === 0 && (data.stock_quantity > 0 || data.stock_quantity === -1)) {
                                 restockedCount++;
                             }
                             item.prev_stock = item.last_stock;
                             item.last_stock = data.stock_quantity;
                             if (data.image && !item.image) item.image = data.image;
-                            if (data.stock_quantity > 0) inStockCount++;
+                            if (data.stock_quantity > 0 || data.stock_quantity === -1) inStockCount++;
                         }
                     } catch { }
                     completed++;
@@ -1068,8 +1070,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const product = {
                     product_name: data.product_name || parseUrlTitle(targetUrl),
                     url: targetUrl,
-                    stock_quantity: data.stock_quantity || 0,
-                    in_stock: Boolean(data.stock_quantity > 0),
+                    stock_quantity: data.stock_quantity != null ? data.stock_quantity : 0,
+                    in_stock: Boolean(data.stock_quantity > 0 || data.stock_quantity === -1),
                     price: '',
                     numeric_price: 0.0,
                     image: data.image || '',
@@ -1078,7 +1080,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 catalogGrid.appendChild(createProductCard(product));
                 if (catalogCountText) catalogCountText.textContent = `Showing 1 direct product lookup`;
-                showToast(`Live stock count: ${data.stock_quantity}`, 'success');
+                const stockMsg = data.stock_quantity === -1 ? 'In Stock (qty hidden by store)' : `Live stock count: ${data.stock_quantity}`;
+                showToast(stockMsg, 'success');
             } else {
                 if (catalogEmpty) catalogEmpty.classList.remove('hidden');
             }
@@ -1225,15 +1228,16 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'result-card';
         card.setAttribute('data-url', product.url);
 
-        const inStock = product.stock_quantity > 0;
-        const isLow = inStock && product.stock_quantity <= 3;
+        const inStock = product.stock_quantity > 0 || product.stock_quantity === -1;
+        const isLow = product.stock_quantity > 0 && product.stock_quantity <= 3;
+        const isUnknownQty = product.stock_quantity === -1;
         const bannerClass = inStock ? (isLow ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
         const statusLabel = inStock ? (isLow ? 'Low Stock' : 'In Stock') : 'Out of Stock';
         const icon = inStock ? (isLow ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
-        const qtyText = inStock ? (isLow ? `Only ${product.stock_quantity} left` : `${Number(product.stock_quantity).toLocaleString()} available`) : '0 available';
+        const qtyText = inStock ? (isUnknownQty ? 'Available' : (isLow ? `Only ${product.stock_quantity} left` : `${Number(product.stock_quantity).toLocaleString()} available`)) : '0 available';
 
         const watchlistItem = getWatchlist().find(w => w.url === product.url);
-        const isRestocked = watchlistItem && watchlistItem.prev_stock === 0 && product.stock_quantity > 0;
+        const isRestocked = watchlistItem && watchlistItem.prev_stock === 0 && inStock;
         const restockTag = isRestocked ? '<span class="restock-badge"><i class="fa-solid fa-sparkles"></i> Restocked!</span>' : '';
 
         const priceHtml = product.price ? `<div class="floating-price-tag">${escapeHtml(product.price)}</div>` : '';

@@ -303,12 +303,19 @@ def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = 
     name = p.get("pro_name") or p.get("product_name") or p.get("title") or "Unknown Product"
     slug = p.get("slug", "")
     pid = p.get("pid", "")
-    stock = p.get("pro_stock", 0)
-    if isinstance(stock, str) and stock.isdigit():
-        stock = int(stock)
-    elif not isinstance(stock, int):
-        stock = 0
-    in_s = bool(p.get("in_stock", stock > 0))
+    raw_stock = p.get("pro_stock")
+    has_stock_field = raw_stock is not None and str(raw_stock).strip() != ""
+    stock = 0
+    if has_stock_field:
+        if isinstance(raw_stock, str) and raw_stock.strip().isdigit():
+            stock = int(raw_stock.strip())
+        elif isinstance(raw_stock, (int, float)):
+            stock = int(raw_stock)
+    in_stock_flag = p.get("in_stock")
+    in_s = bool(int(in_stock_flag)) if in_stock_flag is not None else (stock > 0)
+    if not has_stock_field and in_s:
+        # pro_stock not available on listing pages; use -1 sentinel for "in stock, qty unknown"
+        stock = -1
 
     price_val = p.get("dis_price") or p.get("act_price") or p.get("price") or ""
     numeric_price = 0.0
@@ -719,12 +726,22 @@ def check_stock(request: Request, url: str = Query(..., description="The product
                 )
 
             pro_name = product_details.get("pro_name") or derived_title
-            pro_stock = product_details.get("pro_stock", 0)
+            pro_stock_raw = product_details.get("pro_stock")
+            has_stock = pro_stock_raw is not None and str(pro_stock_raw).strip() != ""
+            in_stock_flag = product_details.get("in_stock")
+            in_stock_bool = bool(int(in_stock_flag)) if in_stock_flag is not None else False
 
-            if isinstance(pro_stock, str) and pro_stock.isdigit():
-                pro_stock = int(pro_stock)
-            elif not isinstance(pro_stock, int):
-                pro_stock = 0
+            if has_stock:
+                pro_stock = pro_stock_raw
+                if isinstance(pro_stock, str) and pro_stock.strip().isdigit():
+                    pro_stock = int(pro_stock.strip())
+                elif isinstance(pro_stock, (int, float)):
+                    pro_stock = int(pro_stock)
+                else:
+                    pro_stock = -1 if in_stock_bool else 0
+            else:
+                # pro_stock hidden until add-to-cart; use -1 sentinel if in_stock flag is set
+                pro_stock = -1 if in_stock_bool else 0
 
             img_val = ""
             imgs = product_details.get("prd_images")
