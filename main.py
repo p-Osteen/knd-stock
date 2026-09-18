@@ -3,6 +3,7 @@ import hmac
 import json
 import os
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 
@@ -295,6 +296,59 @@ def fetch_url(url: str, timeout: int = DEFAULT_TIMEOUT, max_retries: int = MAX_R
             if attempt < max_retries:
                 continue
     raise last_exception
+
+
+def _get_stock_via_cart(product_id: int) -> int | None:
+    """
+    Get real stock count by temporarily adding item to a visitor cart.
+    KND hides pro_stock on product/listing pages but exposes it in
+    the visitor cart API response after an add-to-cart action.
+    Returns the stock count, or None if the trick fails.
+    """
+    vid = str(uuid.uuid4())
+    try:
+        add_r = session.post(
+            "https://www.karzanddolls.com/karzOffice/api/cart/visitor/add",
+            json={"visitor_id": vid, "product_id": product_id, "quantity": 1},
+            headers={
+                **SESSION_HEADERS,
+                "Content-Type": "application/json",
+                "Origin": "https://www.karzanddolls.com",
+                "Referer": "https://www.karzanddolls.com/",
+            },
+            timeout=DEFAULT_TIMEOUT,
+        )
+        if not add_r.ok:
+            return None
+        add_data = add_r.json()
+        if not add_data.get("success"):
+            msg = str(add_data.get("message", "")).lower()
+            if "stock" in msg or "unavailable" in msg or "sold" in msg:
+                return 0  # item is genuinely out of stock
+            return None
+
+        # Fetch visitor cart — response includes full product data with pro_stock
+        cart_r = session.get(
+            f"https://www.karzanddolls.com/karzOffice/api/cart/visitor?visitor_id={vid}",
+            headers={**SESSION_HEADERS, "Referer": "https://www.karzanddolls.com/"},
+            timeout=DEFAULT_TIMEOUT,
+        )
+        if not cart_r.ok:
+            return None
+        cart_data = cart_r.json()
+        if cart_data.get("success") and isinstance(cart_data.get("data"), list):
+            for entry in cart_data["data"]:
+                prod = entry.get("product") or {}
+                if prod.get("id") == product_id:
+                    val = prod.get("pro_stock")
+                    if val is not None:
+                        try:
+                            return int(val)
+                        except (ValueError, TypeError):
+                            pass
+        return None
+    except Exception:
+        return None
 
 
 def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = "") -> SearchItem | None:
@@ -740,8 +794,16 @@ def check_stock(request: Request, url: str = Query(..., description="The product
                 else:
                     pro_stock = -1 if in_stock_bool else 0
             else:
-                # pro_stock hidden until add-to-cart; use -1 sentinel if in_stock flag is set
-                pro_stock = -1 if in_stock_bool else 0
+                # pro_stock hidden; use visitor cart trick to get real count
+                numeric_id = product_details.get("id")
+                if numeric_id:
+                    cart_stock = _get_stock_via_cart(int(numeric_id))
+                    if cart_stock is not None:
+                        pro_stock = cart_stock
+                    else:
+                        pro_stock = -1 if in_stock_bool else 0
+                else:
+                    pro_stock = -1 if in_stock_bool else 0
 
             img_val = ""
             imgs = product_details.get("prd_images")
