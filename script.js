@@ -108,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let liveCategoriesTree = [];
     let isCheckingWatchlist = false;
+    let isAppInitialized = false;
 
     // =========================================================================
     // UTILITIES
@@ -1372,7 +1373,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
     // INITIALIZATION
     // =========================================================================
-    let isAppInitialized = false;
 
     async function initApp() {
         if (isAppInitialized) return;
