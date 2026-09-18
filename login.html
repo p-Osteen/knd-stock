@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>Access Required — KND Stock Checker</title>
+    <meta name="description" content="Password protected access for KND Stock Checker.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css?v=8">
+    <style>
+        .login-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 440px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-xl);
+            padding: 2.5rem 2rem;
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.7),
+                0 0 0 1px rgba(255, 255, 255, 0.05),
+                0 0 40px -10px var(--accent-glow);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+        }
+
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end), var(--accent-magenta));
+        }
+
+        .login-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            background: rgba(99, 102, 241, 0.12);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-full);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 1.25rem;
+        }
+
+        .login-icon-bubble {
+            width: 64px;
+            height: 64px;
+            border-radius: var(--radius-lg);
+            background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 1.8rem;
+            box-shadow: 0 8px 24px var(--accent-glow), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 1.2rem;
+        }
+
+        .login-title {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: -0.025em;
+            margin-bottom: 0.4rem;
+        }
+
+        .login-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.8rem;
+            line-height: 1.45;
+        }
+
+        .login-form {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1.1rem;
+        }
+
+        .login-input-group {
+            position: relative;
+            width: 100%;
+        }
+
+        .login-input-icon {
+            position: absolute;
+            left: 1.1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 1rem;
+            pointer-events: none;
+            transition: color 0.2s ease;
+        }
+
+        .login-input {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            padding: 0.95rem 3.2rem 0.95rem 2.85rem;
+            font-family: var(--font);
+            font-size: 1rem;
+            color: var(--text-primary);
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+            letter-spacing: 0.05em;
+        }
+
+        .login-input:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+            background: rgba(18, 22, 38, 0.95);
+        }
+
+        .login-input:focus~.login-input-icon {
+            color: var(--accent-start);
+        }
+
+        .login-toggle-eye {
+            position: absolute;
+            right: 0.85rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0.4rem 0.6rem;
+            font-size: 0.95rem;
+            border-radius: var(--radius-xs);
+            transition: color 0.2s ease;
+        }
+
+        .login-toggle-eye:hover {
+            color: var(--text-primary);
+        }
+
+        .login-submit-btn {
+            width: 100%;
+            background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            border-radius: var(--radius-md);
+            padding: 0.95rem;
+            font-family: var(--font);
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.6rem;
+            box-shadow: 0 4px 18px var(--accent-glow);
+            transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), opacity 0.2s ease;
+        }
+
+        .login-submit-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 24px var(--accent-glow);
+        }
+
+        .login-submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .login-submit-btn:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .login-btn-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .login-error {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            background: var(--ruby-bg);
+            border: 1px solid var(--ruby-border);
+            color: var(--ruby-light);
+            border-radius: var(--radius-sm);
+            padding: 0.7rem 0.9rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            width: 100%;
+        }
+
+        .login-error.visible {
+            display: flex;
+            animation: shake 0.4s ease-in-out;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20%,
+            60% {
+                transform: translateX(-6px);
+            }
+
+            40%,
+            80% {
+                transform: translateX(6px);
+            }
+        }
+
+        .login-footer-hint {
+            margin-top: 1.5rem;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-mesh" aria-hidden="true">
+        <div class="mesh-orb mesh-orb--1"></div>
+        <div class="mesh-orb mesh-orb--2"></div>
+        <div class="mesh-orb mesh-orb--3"></div>
+        <div class="mesh-grid"></div>
+        <div class="mesh-grain"></div>
+    </div>
+
+    <div class="login-wrapper">
+        <div class="login-card" id="login-card">
+            <div class="login-badge">
+                <i class="fa-solid fa-lock"></i>
+                <span>Protected System</span>
+            </div>
+
+            <div class="login-icon-bubble">
+                <i class="fa-solid fa-car-side"></i>
+            </div>
+
+            <h1 class="login-title">KND Stock Checker</h1>
+            <p class="login-desc">Enter the system access password to open the live inventory tool.</p>
+
+            <form id="login-form" class="login-form" autocomplete="off">
+                <div class="login-error" id="login-error" role="alert">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span id="login-error-msg">Incorrect password. Please try again.</span>
+                </div>
+
+                <div class="login-input-group">
+                    <input type="password" id="password-input" class="login-input" placeholder="Enter password"
+                        autocomplete="current-password" autofocus required />
+                    <i class="fa-solid fa-key login-input-icon"></i>
+                    <button type="button" class="login-toggle-eye" id="toggle-pw-btn"
+                        aria-label="Toggle password visibility">
+                        <i class="fa-solid fa-eye" id="toggle-pw-icon"></i>
+                    </button>
+                </div>
+
+                <button type="submit" class="login-submit-btn" id="login-btn">
+                    <span id="login-btn-text">Unlock Access</span>
+                    <i class="fa-solid fa-arrow-right" id="login-btn-icon"></i>
+                    <div class="login-btn-spinner hidden" id="login-btn-spinner" style="display: none;"></div>
+                </button>
+            </form>
+
+            <div class="login-footer-hint">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>7-day authenticated access session</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('login-form');
+        const input = document.getElementById('password-input');
+        const toggleBtn = document.getElementById('toggle-pw-btn');
+        const toggleIcon = document.getElementById('toggle-pw-icon');
+        const submitBtn = document.getElementById('login-btn');
+        const btnText = document.getElementById('login-btn-text');
+        const btnIcon = document.getElementById('login-btn-icon');
+        const btnSpinner = document.getElementById('login-btn-spinner');
+        const errorBox = document.getElementById('login-error');
+        const errorMsg = document.getElementById('login-error-msg');
+
+        toggleBtn.addEventListener('click', () => {
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            toggleIcon.className = isPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+            input.focus();
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = input.value.trim();
+            if (!password) return;
+
+            errorBox.classList.remove('visible');
+            submitBtn.disabled = true;
+            btnText.textContent = 'Verifying…';
+            btnIcon.style.display = 'none';
+            btnSpinner.style.display = 'block';
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ password })
+                });
+
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success && data.token) {
+                    localStorage.setItem('knd_session_token', data.token);
+                    btnText.textContent = 'Access Granted';
+                    btnSpinner.style.display = 'none';
+                    btnIcon.className = 'fa-solid fa-circle-check';
+                    btnIcon.style.display = 'inline-block';
+                    submitBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 400);
+                } else {
+                    errorMsg.textContent = data.message || 'Incorrect password. Please try again.';
+                    errorBox.classList.add('visible');
+                    submitBtn.disabled = false;
+                    btnText.textContent = 'Unlock Access';
+                    btnIcon.style.display = 'inline-block';
+                    btnSpinner.style.display = 'none';
+                    input.select();
+                }
+            } catch (err) {
+                errorMsg.textContent = 'Network error. Could not connect to server.';
+                errorBox.classList.add('visible');
+                submitBtn.disabled = false;
+                btnText.textContent = 'Unlock Access';
+                btnIcon.style.display = 'inline-block';
+                btnSpinner.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+
+</html>
