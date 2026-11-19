@@ -824,6 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     populateCategoryDropdown();
                     populateBrandDropdown();
                     populateSubcategoryDropdown();
+                    syncQuickPillsWithFilters();
                 }
             }
         } catch {}
@@ -858,6 +859,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     populateCategoryDropdown();
                     populateBrandDropdown();
                     populateSubcategoryDropdown();
+                    syncQuickPillsWithFilters();
                 }
             }
         } catch (err) {
@@ -892,8 +894,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function populateBrandDropdown(forceSelectFirst = false) {
         if (!filterBrand) return;
-        const previousBrand = filterBrand.value;
+        const previousBrand = filterBrand.value || catalogState.brand;
         filterBrand.innerHTML = '';
+
+        const allOpt = document.createElement('option');
+        allOpt.value = 'all';
+        allOpt.textContent = 'All Brands';
+        filterBrand.appendChild(allOpt);
 
         const catObj = getSelectedCategoryObj();
         if (catObj && Array.isArray(catObj.subcategories) && catObj.subcategories.length > 0) {
@@ -908,23 +915,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasPrevious = !forceSelectFirst && Array.from(filterBrand.options).some(o => o.value === previousBrand);
         if (hasPrevious) {
             filterBrand.value = previousBrand;
-        } else if (filterBrand.options.length > 0) {
-            filterBrand.value = filterBrand.options[0].value;
         } else {
-            filterBrand.value = '';
+            filterBrand.value = 'all';
         }
         catalogState.brand = filterBrand.value;
     }
 
     function populateSubcategoryDropdown(forceSelectFirst = false) {
         if (!filterSubcategory) return;
-        const previousSub = filterSubcategory.value;
+        const previousSub = filterSubcategory.value || catalogState.subcategory;
         filterSubcategory.innerHTML = '';
+
+        const allSubOpt = document.createElement('option');
+        allSubOpt.value = 'all';
+        allSubOpt.textContent = 'All Lineups';
+        filterSubcategory.appendChild(allSubOpt);
 
         const catObj = getSelectedCategoryObj();
         const brandSlug = filterBrand ? filterBrand.value : '';
 
-        if (catObj && brandSlug) {
+        if (catObj && brandSlug && brandSlug !== 'all') {
             const brandObj = (catObj.subcategories || []).find(s => s.slug === brandSlug);
             if (brandObj) {
                 if (Array.isArray(brandObj.series) && brandObj.series.length > 0) {
@@ -935,24 +945,43 @@ document.addEventListener('DOMContentLoaded', () => {
                         filterSubcategory.appendChild(opt);
                     });
                 }
-                if (filterSubcategory.options.length === 0) {
-                    const opt = document.createElement('option');
-                    opt.value = brandObj.slug || brandSlug;
-                    opt.textContent = brandObj.name;
-                    filterSubcategory.appendChild(opt);
-                }
             }
         }
 
         const hasPrevious = !forceSelectFirst && Array.from(filterSubcategory.options).some(o => o.value === previousSub);
         if (hasPrevious) {
             filterSubcategory.value = previousSub;
-        } else if (filterSubcategory.options.length > 0) {
-            filterSubcategory.value = filterSubcategory.options[0].value;
         } else {
-            filterSubcategory.value = '';
+            filterSubcategory.value = 'all';
         }
         catalogState.subcategory = filterSubcategory.value;
+    }
+
+    function setActivePill(activePillId) {
+        [pillAll, pillPreorders, pillNewArrivals].forEach(p => {
+            if (p) p.classList.toggle('active', p.id === activePillId);
+        });
+    }
+
+    function syncQuickPillsWithFilters() {
+        if (catalogState.category === 'new-arrivals') {
+            setActivePill('pill-new-arrivals');
+        } else if (
+            (catalogState.category === 'cars' || !catalogState.category) &&
+            catalogState.brand === 'pre-orders' &&
+            catalogState.subcategory === 'pre-order-minigt'
+        ) {
+            setActivePill('pill-preorders');
+        } else if (
+            (!catalogState.brand || catalogState.brand === 'all') &&
+            (!catalogState.subcategory || catalogState.subcategory === 'all') &&
+            (catalogState.category === 'cars' || !catalogState.category) &&
+            !catalogState.search
+        ) {
+            setActivePill('pill-all');
+        } else {
+            setActivePill('');
+        }
     }
 
     if (filterCategory) {
@@ -960,6 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
             catalogState.category = filterCategory.value;
             populateBrandDropdown(true);
             populateSubcategoryDropdown(true);
+            syncQuickPillsWithFilters();
             catalogState.page = 1;
             fetchCatalog();
         });
@@ -969,6 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filterBrand.addEventListener('change', () => {
             catalogState.brand = filterBrand.value;
             populateSubcategoryDropdown(true);
+            syncQuickPillsWithFilters();
             catalogState.page = 1;
             fetchCatalog();
         });
@@ -977,6 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (filterSubcategory) {
         filterSubcategory.addEventListener('change', () => {
             catalogState.subcategory = filterSubcategory.value;
+            syncQuickPillsWithFilters();
             catalogState.page = 1;
             fetchCatalog();
         });
@@ -990,23 +1022,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-
-    function setActivePill(activePillId) {
-        [pillAll, pillPreorders, pillNewArrivals].forEach(p => {
-            if (p) p.classList.toggle('active', p.id === activePillId);
-        });
-    }
-
     if (pillAll) {
         pillAll.addEventListener('click', () => {
-            setActivePill('pill-all');
             resetCatalogFilters();
         });
     }
 
     if (pillPreorders) {
         pillPreorders.addEventListener('click', async () => {
-            setActivePill('pill-preorders');
             if (!liveCategoriesTree || liveCategoriesTree.length === 0) {
                 await fetchCategoriesTree();
             }
@@ -1044,6 +1067,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (catalogSearchInput) catalogSearchInput.value = '';
             if (catalogClearSearch) catalogClearSearch.classList.add('hidden');
             catalogState.page = 1;
+            syncQuickPillsWithFilters();
             fetchCatalog();
             showToast('Showing PO lineups 🔥', 'info');
         });
@@ -1051,14 +1075,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (pillNewArrivals) {
         pillNewArrivals.addEventListener('click', () => {
-            setActivePill('pill-new-arrivals');
             catalogState.category = 'new-arrivals';
             catalogState.brand = 'all';
             catalogState.subcategory = 'all';
+            if (filterCategory) {
+                const naOpt = Array.from(filterCategory.options).find(o => o.value === 'new-arrivals');
+                if (naOpt) filterCategory.value = 'new-arrivals';
+            }
+            populateBrandDropdown(true);
+            populateSubcategoryDropdown(true);
             catalogState.search = '';
             if (catalogSearchInput) catalogSearchInput.value = '';
             if (catalogClearSearch) catalogClearSearch.classList.add('hidden');
             catalogState.page = 1;
+            syncQuickPillsWithFilters();
             fetchCatalog();
             showToast('Showing New Arrivals drops ✨', 'info');
         });
@@ -1083,11 +1113,11 @@ document.addEventListener('DOMContentLoaded', () => {
         populateSubcategoryDropdown(true);
         if (catalogSortSelect) catalogSortSelect.value = 'latest';
         catalogState.sort = 'latest';
-        setActivePill('pill-all');
         if (catalogSearchInput) catalogSearchInput.value = '';
         if (catalogClearSearch) catalogClearSearch.classList.add('hidden');
         catalogState.search = '';
         catalogState.page = 1;
+        syncQuickPillsWithFilters();
         fetchCatalog();
     }
 
@@ -1350,7 +1380,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const tag = document.createElement('span');
             tag.className = 'catalog-filter-tag';
             const brandName = filterBrand?.options[filterBrand.selectedIndex]?.textContent || catalogState.brand;
-            tag.textContent = `Brand: ${brandName}`;
+            tag.innerHTML = `Brand: ${escapeHtml(brandName)} <i class="fa-solid fa-xmark"></i>`;
+            tag.title = 'Click to show All Brands';
+            tag.addEventListener('click', () => {
+                if (filterBrand) filterBrand.value = 'all';
+                catalogState.brand = 'all';
+                populateSubcategoryDropdown(true);
+                syncQuickPillsWithFilters();
+                catalogState.page = 1;
+                fetchCatalog();
+            });
             catalogActiveFilterTags.appendChild(tag);
         }
 
@@ -1358,7 +1397,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const tag = document.createElement('span');
             tag.className = 'catalog-filter-tag';
             const subName = filterSubcategory?.options[filterSubcategory.selectedIndex]?.textContent || catalogState.subcategory;
-            tag.textContent = `Lineup: ${subName}`;
+            tag.innerHTML = `Lineup: ${escapeHtml(subName)} <i class="fa-solid fa-xmark"></i>`;
+            tag.title = 'Click to show All Lineups';
+            tag.addEventListener('click', () => {
+                if (filterSubcategory) filterSubcategory.value = 'all';
+                catalogState.subcategory = 'all';
+                syncQuickPillsWithFilters();
+                catalogState.page = 1;
+                fetchCatalog();
+            });
             catalogActiveFilterTags.appendChild(tag);
         }
 
