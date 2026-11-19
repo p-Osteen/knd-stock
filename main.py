@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import os
 import time
 import uuid
@@ -10,12 +11,19 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from curl_cffi import requests
 from bs4 import BeautifulSoup
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("knd_stock_checker")
 
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
@@ -26,25 +34,6 @@ RATE_LIMIT = os.getenv("RATE_LIMIT", "300/minute")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
-limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="KND Stock Checker API")
-app.state.limiter = limiter
-
-@app.exception_handler(RateLimitExceeded)
-async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=429,
-        content={"error": "Rate limit exceeded. Please wait a moment before checking more items.", "success": False}
-    )
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
-
 if os.path.exists(".env"):
     try:
         with open(".env", "r", encoding="utf-8") as _f:
@@ -53,28 +42,37 @@ if os.path.exists(".env"):
                 if _line and not _line.startswith("#") and "=" in _line:
                     _k, _v = _line.split("=", 1)
                     os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error reading .env file: {e}")
 
 APP_PASSWORD = os.getenv("APP_PASSWORD")
-SESSION_SECRET = os.getenv("SESSION_SECRET", "knd-stock-auth-secret-key-v1-production")
-SESSION_MAX_AGE = 7 * 24 * 60 * 60  # 7 days in seconds
+SESSION_SECRET = os.getenv("SESSION_SECRET")
+if not SESSION_SECRET:
+    SESSION_SECRET = "knd-stock-fallback-" + uuid.uuid4().hex[:16]
+    logger.warning(
+        "SESSION_SECRET not set! Using a random fallback — sessions will NOT survive restarts. "
+        "Set SESSION_SECRET in your environment for production."
+    )
+SESSION_MAX_AGE = 7 * 24 * 60 * 60
 SESSION_COOKIE_NAME = "knd_session"
 
 
 def create_session_token() -> str:
+    nonce = uuid.uuid4().hex
     expires_at = int(time.time()) + SESSION_MAX_AGE
-    payload = f"{expires_at}"
+    payload = f"{nonce}:{expires_at}"
     sig = hmac.new(SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return f"{payload}:{sig}"
 
 
 def is_valid_session(token: str | None) -> bool:
-    if not token or ":" not in token:
+    if not token or token.count(":") < 2:
         return False
     try:
-        payload, sig = token.split(":", 1)
-        expires_at = int(payload)
+        parts = token.rsplit(":", 1)
+        payload = parts[0]
+        sig = parts[1]
+        expires_at = int(payload.rsplit(":", 1)[1])
         if time.time() > expires_at:
             return False
         expected_sig = hmac.new(SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
@@ -98,8 +96,54 @@ def check_authenticated(request: Request) -> bool:
     return is_valid_session(token)
 
 
+def get_client_identifier(request: Request) -> str:
+    
+    token = get_session_token(request)
+    if token:
+        return f"sess:{token[:32]}"
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=get_client_identifier)
+app = FastAPI(title="KND Stock Checker API")
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    logger.warning(f"Rate limit exceeded for client {get_client_identifier(request)}")
+    return JSONResponse(
+        status_code=429,
+        content={"error": "Rate limit exceeded. Please wait a moment before checking more items.", "success": False}
+    )
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "X-Session-Token", "Content-Type"],
+)
+
+
 class LoginRequest(BaseModel):
-    password: str
+    password: str = Field(..., min_length=1, max_length=256)
 
 
 session = requests.Session(impersonate="chrome120")
@@ -116,6 +160,30 @@ SESSION_HEADERS = {
 
 ALLOWED_HOSTNAMES = {"karzanddolls.com", "www.karzanddolls.com"}
 
+PREORDER_SLUGS = {"pre-orders", "pre-order", "preorder", "preorders"}
+PREORDER_SUBCAT_SLUGS = {
+    "pre-order-minigt", "pre-order-mini-gt", "pre-order-inno64",
+    "pre-order-pop-race", "pre-order-tarmac", "pre-order-bm-creations",
+    "pre-order-para64", "pre-order-time-micro", "pre-order-era-car",
+    "pre-orders", "preorders",
+}
+
+
+def _is_preorder_product(product_data: dict, url: str = "", default_brand: str = "", default_subcat: str = "") -> bool:
+    
+    if product_data.get("is_preorder") or product_data.get("pre_order") or product_data.get("ispreorder"):
+        return True
+    name = str(product_data.get("pro_name") or product_data.get("product_name") or "").lower()
+    if "pre-order" in name or "preorder" in name or "pre order" in name:
+        return True
+    url_lower = url.lower()
+    if any(slug in url_lower for slug in PREORDER_SLUGS):
+        return True
+    for ctx in (default_brand.lower(), default_subcat.lower()):
+        if any(slug in ctx for slug in PREORDER_SLUGS):
+            return True
+    return False
+
 
 class StockResponse(BaseModel):
     product_name: str
@@ -123,6 +191,7 @@ class StockResponse(BaseModel):
     success: bool
     message: str = ""
     image: str = ""
+    is_preorder: bool = False
 
 
 class SearchItem(BaseModel):
@@ -137,6 +206,7 @@ class SearchItem(BaseModel):
     subcategory: str = ""
     created_at: str = ""
     product_id: int | None = None
+    is_preorder: bool = False
 
 
 class SearchResponse(BaseModel):
@@ -151,6 +221,29 @@ class CatalogResponse(BaseModel):
     page: int
     per_page: int
     total_pages: int
+    success: bool
+    message: str = ""
+
+
+class ProductDetailResponse(BaseModel):
+    product_name: str
+    url: str
+    stock_quantity: int
+    in_stock: bool
+    is_preorder: bool = False
+    price: str = ""
+    numeric_price: float = 0.0
+    actual_price: str = ""
+    discount_price: str = ""
+    discount_percent: str = ""
+    brand: str = ""
+    category: str = ""
+    subcategory: str = ""
+    description: str = ""
+    sku: str = ""
+    product_id: int | None = None
+    images: list[str] = []
+    created_at: str = ""
     success: bool
     message: str = ""
 
@@ -199,7 +292,9 @@ async def serve_login():
 
 
 @app.get("/script.js")
-async def serve_script():
+async def serve_script(request: Request):
+    if not check_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     return FileResponse("script.js", media_type="application/javascript")
 
 
@@ -208,15 +303,70 @@ async def serve_styles():
     return FileResponse("styles.css", media_type="text/css")
 
 
+@app.get("/manifest.json")
+async def serve_manifest(request: Request):
+    if not check_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if os.path.exists("manifest.json"):
+        return FileResponse("manifest.json", media_type="application/manifest+json")
+    return JSONResponse(status_code=404, content={"error": "manifest.json not found"})
+
+
+@app.get("/sw.js")
+async def serve_sw():
+    if os.path.exists("sw.js"):
+        return FileResponse("sw.js", media_type="application/javascript")
+    return JSONResponse(status_code=404, content={"error": "sw.js not found"})
+
+
+@app.get("/robots.txt")
+async def serve_robots():
+    if os.path.exists("robots.txt"):
+        return FileResponse("robots.txt", media_type="text/plain")
+    return "User-agent: *\nDisallow: /\n"
+
+
+@app.get("/favicon.ico")
+async def serve_favicon_ico():
+    if os.path.exists("favicon.ico"):
+        return FileResponse("favicon.ico", media_type="image/x-icon")
+    if os.path.exists("favicon.png"):
+        return FileResponse("favicon.png", media_type="image/png")
+    return JSONResponse(status_code=404, content={"error": "favicon not found"})
+
+
+@app.get("/favicon.png")
+async def serve_favicon_png():
+    if os.path.exists("favicon.png"):
+        return FileResponse("favicon.png", media_type="image/png")
+    if os.path.exists("favicon.ico"):
+        return FileResponse("favicon.ico", media_type="image/x-icon")
+    return JSONResponse(status_code=404, content={"error": "favicon not found"})
+
+
+@app.get("/favicon.svg")
+async def serve_favicon_svg():
+    if os.path.exists("favicon.svg"):
+        return FileResponse("favicon.svg", media_type="image/svg+xml")
+    if os.path.exists("favicon.png"):
+        return FileResponse("favicon.png", media_type="image/png")
+    return JSONResponse(status_code=404, content={"error": "favicon not found"})
+
+
 @app.post("/api/login")
 def login(req: LoginRequest, request: Request):
+    client_id = get_client_identifier(request)
     if not APP_PASSWORD:
+        logger.error("Login attempted but APP_PASSWORD is not configured on server.")
         return JSONResponse(
             status_code=500,
             content={"success": False, "message": "Server authentication not configured. Set APP_PASSWORD environment variable."}
         )
-    if req.password == APP_PASSWORD:
+    if len(req.password) > 256:
+        return JSONResponse(status_code=400, content={"success": False, "message": "Password too long."})
+    if hmac.compare_digest(req.password.encode(), APP_PASSWORD.encode()):
         token = create_session_token()
+        logger.info(f"Successful login from {client_id}")
         response = JSONResponse(content={
             "success": True,
             "message": "Authenticated",
@@ -234,12 +384,16 @@ def login(req: LoginRequest, request: Request):
             path="/"
         )
         return response
+    logger.warning(f"Failed login attempt from {client_id}")
     return JSONResponse(status_code=401, content={"success": False, "message": "Incorrect password"})
 
 
 @app.post("/api/logout")
-def logout():
+def logout(request: Request):
+    logger.info(f"Logout from {get_client_identifier(request)}")
     response = JSONResponse(content={"success": True, "message": "Logged out"})
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    return response
     response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
     return response
 
@@ -255,7 +409,9 @@ async def health():
 
 
 @app.get("/api/config")
-async def config():
+async def config(request: Request):
+    if not check_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     return {"backend_url": ""}
 
 
@@ -300,7 +456,22 @@ def fetch_url(url: str, timeout: int = DEFAULT_TIMEOUT, max_retries: int = MAX_R
 
 
 _STOCK_CACHE: dict[int, tuple[int, float]] = {}
-STOCK_CACHE_TTL = 300  # 5 minutes
+STOCK_CACHE_TTL = 300
+STOCK_CACHE_MAX_SIZE = 2000
+
+
+def _evict_stock_cache():
+    
+    if len(_STOCK_CACHE) <= STOCK_CACHE_MAX_SIZE:
+        return
+    now = time.time()
+    expired = [k for k, (_, ts) in _STOCK_CACHE.items() if now - ts >= STOCK_CACHE_TTL]
+    for k in expired:
+        del _STOCK_CACHE[k]
+    if len(_STOCK_CACHE) > STOCK_CACHE_MAX_SIZE:
+        sorted_keys = sorted(_STOCK_CACHE, key=lambda k: _STOCK_CACHE[k][1])
+        for k in sorted_keys[:len(_STOCK_CACHE) - STOCK_CACHE_MAX_SIZE]:
+            del _STOCK_CACHE[k]
 
 
 def _add_single_to_cart(vid: str, pid: int, timeout: int = DEFAULT_TIMEOUT) -> bool:
@@ -325,11 +496,7 @@ def _add_single_to_cart(vid: str, pid: int, timeout: int = DEFAULT_TIMEOUT) -> b
 
 
 def _get_batch_stock_via_cart(product_ids: list[int], timeout: int = DEFAULT_TIMEOUT) -> dict[int, int]:
-    """
-    Get real stock counts for a batch of products using a single temporary visitor cart.
-    KND hides pro_stock on listing and product detail pages until items are added to a cart.
-    Returns a dict mapping numeric product_id -> pro_stock count.
-    """
+    
     if not product_ids:
         return {}
 
@@ -380,6 +547,7 @@ def _get_batch_stock_via_cart(product_ids: list[int], timeout: int = DEFAULT_TIM
     except Exception:
         pass
 
+    _evict_stock_cache()
     return results
 
 
@@ -402,6 +570,12 @@ def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = 
         except (ValueError, TypeError):
             pass
 
+    prod_url = f"https://www.karzanddolls.com/details/{slug}?pid={pid}" if (slug and pid) else ""
+    if not prod_url:
+        return None
+
+    is_preorder = _is_preorder_product(p, url=prod_url, default_brand=default_brand, default_subcat=default_subcat)
+
     raw_stock = p.get("pro_stock")
     has_stock_field = raw_stock is not None and str(raw_stock).strip() != ""
     stock = 0
@@ -410,13 +584,25 @@ def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = 
             stock = int(raw_stock.strip())
         elif isinstance(raw_stock, (int, float)):
             stock = int(raw_stock)
+
     in_stock_flag = p.get("in_stock")
-    in_s = bool(int(in_stock_flag)) if in_stock_flag is not None else (stock > 0)
-    if not has_stock_field and in_s:
+    try:
+        in_s = bool(int(in_stock_flag)) if in_stock_flag is not None else (stock > 0)
+    except (ValueError, TypeError):
+        in_s = str(in_stock_flag).lower() in ("true", "yes", "1") if in_stock_flag else (stock > 0)
+
+    if is_preorder:
+        if has_stock_field and stock > 0:
+            pass
+        elif in_s:
+            stock = -2
+        else:
+            stock = 0
+        in_s = stock != 0
+    elif not has_stock_field and in_s:
         if product_id and product_id in _STOCK_CACHE and (time.time() - _STOCK_CACHE[product_id][1] < STOCK_CACHE_TTL):
             stock = _STOCK_CACHE[product_id][0]
         else:
-            # pro_stock not available on listing pages; use -1 sentinel for "in stock, qty unknown"
             stock = -1
 
     price_val = p.get("dis_price") or p.get("act_price") or p.get("price") or ""
@@ -448,10 +634,6 @@ def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = 
         else:
             img_val = f"https://www.karzanddolls.com/karzOffice/public/assets/productimages/{raw_img}"
 
-    prod_url = f"https://www.karzanddolls.com/details/{slug}?pid={pid}" if (slug and pid) else ""
-    if not prod_url:
-        return None
-
     brand = str(p.get("brand_name") or default_brand or "")
     subcat = str(default_subcat or "")
     created_at = str(p.get("created_at") or p.get("creation_time") or "")
@@ -467,7 +649,8 @@ def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = 
         brand=brand,
         subcategory=subcat,
         created_at=created_at,
-        product_id=product_id
+        product_id=product_id,
+        is_preorder=is_preorder,
     )
 
 
@@ -578,7 +761,7 @@ def unpack_collection(request: Request, url: str = Query(..., description="Karz 
 
 
 _CATEGORY_CACHE: dict = {"data": None, "timestamp": 0}
-CATEGORY_CACHE_TTL = 3600  # 1 hour
+CATEGORY_CACHE_TTL = 3600
 
 
 @app.get("/api/categories")
@@ -642,7 +825,8 @@ def get_categories(request: Request):
 
 
 _CATALOG_CACHE: dict[str, tuple[list[SearchItem], float]] = {}
-CATALOG_CACHE_TTL = 600  # 10 minutes
+CATALOG_CACHE_TTL = 600
+CATALOG_CACHE_MAX_SIZE = 50
 
 DEFAULT_DISCOVERY_URLS = [
     ("https://www.karzanddolls.com/mini-gt/mini-gt", "Mini GT", "Mini GT"),
@@ -674,6 +858,7 @@ def get_catalog(
     subcategory: str = Query("", description="Lineup / series slug"),
     search: str = Query("", description="Keyword search term"),
     sort: str = Query("latest", description="Sort: latest, oldest, price_low, price_high, stock_high"),
+    in_stock_only: bool = Query(False, description="Filter only items currently in stock / available"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(24, ge=1, le=100, description="Items per page")
 ):
@@ -697,6 +882,12 @@ def get_catalog(
                 all_products = _extract_products_from_soup(soup)
             except Exception:
                 all_products = []
+        elif category == "new-arrivals":
+            all_products = _fetch_lineup_products("https://www.karzanddolls.com/new-arrivals", default_brand="New Arrivals")
+            if not all_products:
+                all_products = _fetch_lineup_products("https://www.karzanddolls.com/", default_brand="New Arrivals")
+        elif category in PREORDER_SLUGS or brand in PREORDER_SLUGS:
+            all_products = _fetch_lineup_products("https://www.karzanddolls.com/pre-orders/pre-order-minigt", default_brand="Pre-Orders", default_subcat="Mini GT Pre-orders")
         elif brand and brand.lower() != "all":
             b_slug = brand.strip()
             s_slug = subcategory.strip() if subcategory and subcategory.lower() != "all" else b_slug
@@ -738,8 +929,16 @@ def get_catalog(
 
         if all_products:
             _CATALOG_CACHE[cache_key] = (all_products, now)
+            if len(_CATALOG_CACHE) > CATALOG_CACHE_MAX_SIZE:
+                oldest_key = min(_CATALOG_CACHE, key=lambda k: _CATALOG_CACHE[k][1])
+                del _CATALOG_CACHE[oldest_key]
 
     sorted_items = list(all_products)
+    if in_stock_only:
+        sorted_items = [
+            x for x in sorted_items
+            if x.in_stock or x.stock_quantity > 0 or x.stock_quantity in (-1, -2)
+        ]
     if sort == "price_low":
         sorted_items.sort(key=lambda x: (x.numeric_price <= 0, x.numeric_price))
     elif sort == "price_high":
@@ -770,6 +969,196 @@ def get_catalog(
         success=True,
         message=f"Fetched {len(page_products)} products."
     )
+
+
+@app.get("/api/new-arrivals", response_model=SearchResponse)
+@limiter.limit(RATE_LIMIT)
+def get_new_arrivals(request: Request):
+    if not check_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized. Please enter password.")
+    try:
+        items = _fetch_lineup_products("https://www.karzanddolls.com/new-arrivals", default_brand="New Arrivals")
+        if not items:
+            items = _fetch_lineup_products("https://www.karzanddolls.com/", default_brand="New Arrivals")
+        return SearchResponse(products=items, success=True, message=f"Fetched {len(items)} new arrivals.")
+    except Exception as e:
+        logger.error(f"Error fetching new arrivals: {e}")
+        return SearchResponse(products=[], success=False, message=f"Failed to fetch new arrivals: {_clean_error_message(e)}")
+
+
+@app.get("/api/product-detail", response_model=ProductDetailResponse)
+@limiter.limit(RATE_LIMIT)
+def get_product_detail(request: Request, url: str = Query(..., description="Product URL")):
+    if not check_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized. Please enter password.")
+    target_url = _normalize_knd_url(url)
+    if not _is_allowed_url(target_url):
+        raise HTTPException(status_code=400, detail="Invalid URL. Only karzanddolls.com product URLs are allowed.")
+
+    derived_title = _extract_title_from_url(target_url)
+    try:
+        r = fetch_url(target_url, timeout=DEFAULT_TIMEOUT)
+        if r.status_code == 404:
+            return ProductDetailResponse(
+                product_name=derived_title,
+                url=target_url,
+                stock_quantity=0,
+                in_stock=False,
+                success=True,
+                message="Out of Stock (Page 404)"
+            )
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        next_data = soup.find("script", id="__NEXT_DATA__")
+        if not next_data or not next_data.string:
+            return ProductDetailResponse(
+                product_name=derived_title,
+                url=target_url,
+                stock_quantity=0,
+                in_stock=False,
+                success=False,
+                message="Product details not found in page data."
+            )
+
+        data = json.loads(next_data.string)
+        page_props = ((data.get("props") or {}).get("pageProps")) or {}
+        details = page_props.get("productdetails") or {}
+        if not details:
+            return ProductDetailResponse(
+                product_name=derived_title,
+                url=target_url,
+                stock_quantity=0,
+                in_stock=False,
+                success=False,
+                message="Product data not found in pageProps."
+            )
+
+        name = details.get("pro_name") or derived_title
+        numeric_id = details.get("id")
+        pid_int = None
+        if numeric_id is not None:
+            try:
+                pid_int = int(numeric_id)
+            except (ValueError, TypeError):
+                pass
+
+        is_preorder = _is_preorder_product(details, url=target_url)
+        raw_stock = details.get("pro_stock")
+        has_stock = raw_stock is not None and str(raw_stock).strip() != ""
+        in_stock_flag = details.get("in_stock")
+        try:
+            in_stock_bool = bool(int(in_stock_flag)) if in_stock_flag is not None else False
+        except (ValueError, TypeError):
+            in_stock_bool = str(in_stock_flag).lower() in ("true", "yes", "1") if in_stock_flag else False
+
+        if is_preorder:
+            if has_stock and str(raw_stock).strip().isdigit():
+                pro_stock = int(str(raw_stock).strip())
+            else:
+                pro_stock = -2 if in_stock_bool else 0
+        elif has_stock and str(raw_stock).strip().isdigit():
+            pro_stock = int(str(raw_stock).strip())
+            if pid_int:
+                _STOCK_CACHE[pid_int] = (pro_stock, time.time())
+        else:
+            if pid_int:
+                cart_stock = _get_stock_via_cart(pid_int)
+                pro_stock = cart_stock if cart_stock is not None else (-1 if in_stock_bool else 0)
+            else:
+                pro_stock = -1 if in_stock_bool else 0
+
+        act_p = details.get("act_price") or ""
+        dis_p = details.get("dis_price") or details.get("price") or ""
+        numeric_price = 0.0
+        price_str = ""
+        act_str = ""
+        dis_str = ""
+        if dis_p:
+            try:
+                numeric_price = float(str(dis_p).replace(",", "").replace("₹", "").strip())
+                dis_str = f"₹{int(numeric_price) if numeric_price.is_integer() else numeric_price}"
+                price_str = dis_str
+            except Exception:
+                dis_str = f"₹{dis_p}"
+                price_str = dis_str
+        if act_p:
+            try:
+                act_num = float(str(act_p).replace(",", "").replace("₹", "").strip())
+                act_str = f"₹{int(act_num) if act_num.is_integer() else act_num}"
+                if not price_str:
+                    price_str = act_str
+                    numeric_price = act_num
+            except Exception:
+                act_str = f"₹{act_p}"
+
+        discount_percent = ""
+        if act_p and dis_p:
+            try:
+                a = float(str(act_p).replace(",", "").replace("₹", "").strip())
+                d = float(str(dis_p).replace(",", "").replace("₹", "").strip())
+                if a > d > 0:
+                    pct = round(((a - d) / a) * 100)
+                    discount_percent = f"{pct}% OFF"
+            except Exception:
+                pass
+
+        image_list = []
+        raw_imgs = details.get("prd_images") or details.get("images") or []
+        if isinstance(raw_imgs, list):
+            for img_obj in raw_imgs:
+                img_src = ""
+                if isinstance(img_obj, dict):
+                    img_src = str(img_obj.get("pro_images") or img_obj.get("image") or img_obj.get("src") or "")
+                elif isinstance(img_obj, str):
+                    img_src = img_obj
+                if img_src:
+                    full_img = img_src if img_src.startswith("http") else f"https://www.karzanddolls.com/karzOffice/public/assets/productimages/{img_src}"
+                    if full_img not in image_list:
+                        image_list.append(full_img)
+
+        desc = details.get("pro_desc") or details.get("description") or ""
+        if desc and "<" in desc:
+            desc_soup = BeautifulSoup(desc, "html.parser")
+            desc = desc_soup.get_text(separator="\n").strip()
+
+        brand = str(details.get("brand_name") or details.get("brand") or "")
+        cat_name = str(details.get("cat_name") or details.get("category") or "")
+        subcat_name = str(details.get("sub_name") or details.get("subcategory") or "")
+        sku = str(details.get("sku") or details.get("pro_code") or details.get("pid") or "")
+        created_at = str(details.get("created_at") or "")
+
+        return ProductDetailResponse(
+            product_name=name,
+            url=target_url,
+            stock_quantity=pro_stock,
+            in_stock=pro_stock > 0 or pro_stock in (-1, -2),
+            is_preorder=is_preorder,
+            price=price_str,
+            numeric_price=numeric_price,
+            actual_price=act_str,
+            discount_price=dis_str,
+            discount_percent=discount_percent,
+            brand=brand,
+            category=cat_name,
+            subcategory=subcat_name,
+            description=desc,
+            sku=sku,
+            product_id=pid_int,
+            images=image_list,
+            created_at=created_at,
+            success=True,
+            message="Product detail retrieved successfully."
+        )
+    except Exception as e:
+        logger.error(f"Error fetching product detail for {target_url}: {e}")
+        return ProductDetailResponse(
+            product_name=derived_title,
+            url=target_url,
+            stock_quantity=0,
+            in_stock=False,
+            success=False,
+            message=f"Failed to fetch product details: {_clean_error_message(e)}"
+        )
 
 
 @app.get("/api/batch-stock")
@@ -859,10 +1248,26 @@ def check_stock(request: Request, url: str = Query(..., description="The product
             pro_stock_raw = product_details.get("pro_stock")
             has_stock = pro_stock_raw is not None and str(pro_stock_raw).strip() != ""
             in_stock_flag = product_details.get("in_stock")
-            in_stock_bool = bool(int(in_stock_flag)) if in_stock_flag is not None else False
+            try:
+                in_stock_bool = bool(int(in_stock_flag)) if in_stock_flag is not None else False
+            except (ValueError, TypeError):
+                in_stock_bool = str(in_stock_flag).lower() in ("true", "yes", "1") if in_stock_flag else False
 
             numeric_id = product_details.get("id")
-            if has_stock:
+            is_preorder = _is_preorder_product(product_details, url=target_url)
+
+            if is_preorder:
+                if has_stock:
+                    pro_stock = pro_stock_raw
+                    if isinstance(pro_stock, str) and pro_stock.strip().isdigit():
+                        pro_stock = int(pro_stock.strip())
+                    elif isinstance(pro_stock, (int, float)):
+                        pro_stock = int(pro_stock)
+                    else:
+                        pro_stock = -2 if in_stock_bool else 0
+                else:
+                    pro_stock = -2 if in_stock_bool else 0
+            elif has_stock:
                 pro_stock = pro_stock_raw
                 if isinstance(pro_stock, str) and pro_stock.strip().isdigit():
                     pro_stock = int(pro_stock.strip())
@@ -873,7 +1278,6 @@ def check_stock(request: Request, url: str = Query(..., description="The product
                 if numeric_id and str(numeric_id).isdigit() and pro_stock >= 0:
                     _STOCK_CACHE[int(numeric_id)] = (pro_stock, time.time())
             else:
-                # pro_stock hidden; use visitor cart trick to get real count
                 if numeric_id:
                     cart_stock = _get_stock_via_cart(int(numeric_id))
                     if cart_stock is not None:
@@ -899,8 +1303,9 @@ def check_stock(request: Request, url: str = Query(..., description="The product
                 product_name=pro_name,
                 stock_quantity=pro_stock,
                 success=True,
-                message="Stock retrieved successfully.",
+                message="Pre-order item. Stock retrieved successfully." if is_preorder else "Stock retrieved successfully.",
                 image=img_val,
+                is_preorder=is_preorder,
             )
         else:
             return StockResponse(

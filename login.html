@@ -6,12 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Access Required — KND Stock Checker</title>
     <meta name="description" content="Password protected access for KND Stock Checker.">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0b0e17">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=8">
+    <link rel="stylesheet" href="styles.css?v=9">
     <style>
         .login-wrapper {
             min-height: 100vh;
@@ -21,6 +26,8 @@
             padding: 1.5rem;
             position: relative;
             z-index: 2;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .login-card {
@@ -318,6 +325,22 @@
     </div>
 
     <script>
+        if (window.top !== window.self) {
+            window.top.location = window.self.location;
+        }
+        document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S')) ||
+                (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.key === 'j' || e.key === 'J' || e.key === 'c' || e.key === 'C')) ||
+                e.key === 'F12') {
+                e.preventDefault();
+            }
+        });
+
+        const BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? ''
+            : 'https://knd-stock.onrender.com';
+
         const form = document.getElementById('login-form');
         const input = document.getElementById('password-input');
         const toggleBtn = document.getElementById('toggle-pw-btn');
@@ -348,7 +371,7 @@
             btnSpinner.style.display = 'block';
 
             try {
-                const res = await fetch('/api/login', {
+                const res = await fetch(`${BACKEND_URL}/api/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',

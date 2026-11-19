@@ -7,6 +7,11 @@
     <title>KND Stock Checker — Live Inventory Lookup</title>
     <meta name="description"
         content="Check live product stock counts on Karz and Dolls instantly. Search product names or paste links.">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0b0e17">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap"
@@ -75,7 +80,30 @@
             height: 3px;
             background: linear-gradient(90deg, #6366f1, #8b5cf6, #d946ef);
         }
+
+        body {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        input, textarea, select {
+            -webkit-user-select: auto;
+            user-select: auto;
+        }
     </style>
+    <script>
+        if (window.top !== window.self) {
+            window.top.location = window.self.location;
+        }
+        document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S')) ||
+                (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.key === 'j' || e.key === 'J' || e.key === 'c' || e.key === 'C')) ||
+                e.key === 'F12') {
+                e.preventDefault();
+            }
+        });
+    </script>
 </head>
 
 <body>
@@ -87,7 +115,6 @@
         <div class="mesh-grain"></div>
     </div>
 
-    <!-- Authentication Gate Modal -->
     <div id="auth-gate-modal" class="auth-gate-overlay hidden">
         <div class="auth-gate-card">
             <div class="login-badge">
@@ -178,7 +205,6 @@
         </header>
 
         <main class="app-main">
-            <!-- Screen 1: Interactive Live Catalog View -->
             <section id="catalog-view" class="view-screen active">
                 <div class="catalog-search-card">
                     <div class="catalog-search-row">
@@ -199,7 +225,6 @@
                         </button>
                     </div>
 
-                    <!-- 3-Tier Category, Brand & Subcategory Filters + Sorting -->
                     <div class="catalog-filter-bar">
                         <div class="filter-group">
                             <label class="filter-label" for="filter-category">Category</label>
@@ -233,9 +258,28 @@
                             </select>
                         </div>
 
+                        <label class="filter-toggle-wrap" for="filter-in-stock-only" title="Hide out-of-stock items">
+                            <input type="checkbox" id="filter-in-stock-only" class="filter-toggle-input" />
+                            <span class="toggle-switch"></span>
+                            <span class="filter-toggle-label"><i class="fa-solid fa-box-open"></i> In Stock Only</span>
+                        </label>
+
                         <button type="button" id="filter-reset-btn" class="filter-reset-btn" title="Reset all filters">
                             <i class="fa-solid fa-rotate-left"></i>
                             <span>Reset</span>
+                        </button>
+                    </div>
+
+                    <div class="catalog-quick-pills">
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Quick View:</span>
+                        <button type="button" class="quick-pill-btn active" id="pill-all">
+                            <i class="fa-solid fa-layer-group"></i> All Items
+                        </button>
+                        <button type="button" class="quick-pill-btn quick-pill-btn--preorder" id="pill-preorders">
+                            <i class="fa-solid fa-clock"></i> Pre-Orders
+                        </button>
+                        <button type="button" class="quick-pill-btn quick-pill-btn--new" id="pill-new-arrivals">
+                            <i class="fa-solid fa-sparkles"></i> New Arrivals
                         </button>
                     </div>
                 </div>
@@ -278,7 +322,6 @@
                 <div id="catalog-pagination" class="catalog-pagination"></div>
             </section>
 
-            <!-- Screen 2: Dedicated Watchlist View (Separate Screen, No Popup) -->
             <section id="watchlist-view" class="view-screen hidden">
                 <div class="screen-header">
                     <div class="screen-header__left">
@@ -353,6 +396,15 @@
     </div>
 
     <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+    <div id="product-detail-modal" class="product-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="product-modal-card">
+            <button type="button" class="product-modal-close" id="product-modal-close" aria-label="Close dialog">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div id="product-modal-body"></div>
+        </div>
+    </div>
 
     <script src="script.js?v=9"></script>
 </body>

@@ -1,0 +1,24 @@
+{
+  "name": "KND Stock Checker",
+  "short_name": "KND Stock",
+  "description": "Live Inventory & Stock Lookup for Karz and Dolls Diecast Models",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0e17",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": ["shopping", "utilities"]
+}
