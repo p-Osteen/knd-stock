@@ -229,11 +229,10 @@
                         <div class="filter-group">
                             <label class="filter-label" for="filter-category">Category</label>
                             <select id="filter-category" class="filter-select">
-                                <option value="cars">Cars</option>
                                 <option value="action-figures-and-dolls">Action Figures</option>
-                                <option value="lego">Lego</option>
                                 <option value="books">Books</option>
-                                <option value="specials">Specials / Pre-Orders</option>
+                                <option value="cars" selected>Cars</option>
+                                <option value="lego">Lego</option>
                             </select>
                         </div>
 
@@ -258,12 +257,6 @@
                             </select>
                         </div>
 
-                        <label class="filter-toggle-wrap" for="filter-in-stock-only" title="Hide out-of-stock items">
-                            <input type="checkbox" id="filter-in-stock-only" class="filter-toggle-input" />
-                            <span class="toggle-switch"></span>
-                            <span class="filter-toggle-label"><i class="fa-solid fa-box-open"></i> In Stock Only</span>
-                        </label>
-
                         <button type="button" id="filter-reset-btn" class="filter-reset-btn" title="Reset all filters">
                             <i class="fa-solid fa-rotate-left"></i>
                             <span>Reset</span>
@@ -276,7 +269,7 @@
                             <i class="fa-solid fa-layer-group"></i> All Items
                         </button>
                         <button type="button" class="quick-pill-btn quick-pill-btn--preorder" id="pill-preorders">
-                            <i class="fa-solid fa-clock"></i> Pre-Orders
+                            <i class="fa-solid fa-clock"></i> PO Lineups
                         </button>
                         <button type="button" class="quick-pill-btn quick-pill-btn--new" id="pill-new-arrivals">
                             <i class="fa-solid fa-sparkles"></i> New Arrivals
@@ -396,15 +389,6 @@
     </div>
 
     <div class="toast-container" id="toast-container" aria-live="polite"></div>
-
-    <div id="product-detail-modal" class="product-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
-        <div class="product-modal-card">
-            <button type="button" class="product-modal-close" id="product-modal-close" aria-label="Close dialog">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-            <div id="product-modal-body"></div>
-        </div>
-    </div>
 
     <script src="script.js?v=9"></script>
 </body>

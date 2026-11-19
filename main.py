@@ -422,7 +422,7 @@ MAX_RETRIES = int(os.getenv("MAX_RETRIES", "1"))
 def _clean_error_message(err: Exception) -> str:
     err_str = str(err).lower()
     if "404" in err_str:
-        return "Out of Stock (Page 404)"
+        return "Product not found in inventory."
     if "429" in err_str or "rate limit" in err_str:
         return "Rate limit reached. Please wait a moment."
     if "timed out" in err_str or "curl: (28)" in err_str or "timeout" in err_str:
@@ -605,6 +605,9 @@ def _format_search_item(p: dict, default_brand: str = "", default_subcat: str = 
         else:
             stock = -1
 
+    if not in_s or stock == 0:
+        return None
+
     price_val = p.get("dis_price") or p.get("act_price") or p.get("price") or ""
     numeric_price = 0.0
     price_str = ""
@@ -700,27 +703,6 @@ def _extract_products_from_soup(soup: BeautifulSoup, default_brand: str = "", de
         except Exception:
             pass
 
-    if not items:
-        for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"].strip()
-            if "/details/" in href:
-                full_url = href if href.startswith("http") else f"https://www.karzanddolls.com{href}"
-                if full_url not in seen_urls:
-                    seen_urls.add(full_url)
-                    title = a_tag.get_text(strip=True) or _extract_title_from_url(full_url)
-                    items.append(SearchItem(
-                        product_name=title,
-                        url=full_url,
-                        stock_quantity=0,
-                        in_stock=False,
-                        price="",
-                        numeric_price=0.0,
-                        image="",
-                        brand=default_brand,
-                        subcategory=default_subcat,
-                        created_at=""
-                    ))
-
     return items
 
 
@@ -803,17 +785,21 @@ def get_categories(request: Request):
                         "slug": sc_slug,
                         "url": f"https://www.karzanddolls.com/{sc_slug}/{sc_slug}"
                     })
+                series_list.sort(key=lambda x: (x.get("name") or "").strip().lower())
                 subcats.append({
                     "name": sc_name,
                     "slug": sc_slug,
                     "series": series_list
                 })
             if subcats:
+                subcats.sort(key=lambda x: (x.get("name") or "").strip().lower())
                 parsed_categories.append({
                     "name": c_title,
                     "slug": c_slug,
                     "subcategories": subcats
                 })
+
+        parsed_categories.sort(key=lambda x: (x.get("name") or "").strip().lower())
 
         _CATEGORY_CACHE["data"] = parsed_categories
         _CATEGORY_CACHE["timestamp"] = now
@@ -858,7 +844,6 @@ def get_catalog(
     subcategory: str = Query("", description="Lineup / series slug"),
     search: str = Query("", description="Keyword search term"),
     sort: str = Query("latest", description="Sort: latest, oldest, price_low, price_high, stock_high"),
-    in_stock_only: bool = Query(False, description="Filter only items currently in stock / available"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(24, ge=1, le=100, description="Items per page")
 ):
@@ -933,12 +918,10 @@ def get_catalog(
                 oldest_key = min(_CATALOG_CACHE, key=lambda k: _CATALOG_CACHE[k][1])
                 del _CATALOG_CACHE[oldest_key]
 
-    sorted_items = list(all_products)
-    if in_stock_only:
-        sorted_items = [
-            x for x in sorted_items
-            if x.in_stock or x.stock_quantity > 0 or x.stock_quantity in (-1, -2)
-        ]
+    sorted_items = [
+        x for x in all_products
+        if (x.in_stock and x.stock_quantity != 0) or x.stock_quantity in (-1, -2)
+    ]
     if sort == "price_low":
         sorted_items.sort(key=lambda x: (x.numeric_price <= 0, x.numeric_price))
     elif sort == "price_high":
@@ -1004,8 +987,8 @@ def get_product_detail(request: Request, url: str = Query(..., description="Prod
                 url=target_url,
                 stock_quantity=0,
                 in_stock=False,
-                success=True,
-                message="Out of Stock (Page 404)"
+                success=False,
+                message="Product not found in inventory."
             )
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
@@ -1054,6 +1037,11 @@ def get_product_detail(request: Request, url: str = Query(..., description="Prod
         if is_preorder:
             if has_stock and str(raw_stock).strip().isdigit():
                 pro_stock = int(str(raw_stock).strip())
+                if pid_int:
+                    _STOCK_CACHE[pid_int] = (pro_stock, time.time())
+            elif pid_int:
+                cart_stock = _get_stock_via_cart(pid_int)
+                pro_stock = cart_stock if cart_stock is not None else (-2 if in_stock_bool else 0)
             else:
                 pro_stock = -2 if in_stock_bool else 0
         elif has_stock and str(raw_stock).strip().isdigit():
@@ -1066,6 +1054,17 @@ def get_product_detail(request: Request, url: str = Query(..., description="Prod
                 pro_stock = cart_stock if cart_stock is not None else (-1 if in_stock_bool else 0)
             else:
                 pro_stock = -1 if in_stock_bool else 0
+
+        is_in_stock = (pro_stock > 0 or pro_stock in (-1, -2)) and in_stock_bool
+        if not is_in_stock or pro_stock == 0:
+            return ProductDetailResponse(
+                product_name=name,
+                url=target_url,
+                stock_quantity=0,
+                in_stock=False,
+                success=False,
+                message="Product is currently not available in inventory."
+            )
 
         act_p = details.get("act_price") or ""
         dis_p = details.get("dis_price") or details.get("price") or ""
@@ -1223,8 +1222,8 @@ def check_stock(request: Request, url: str = Query(..., description="The product
             return StockResponse(
                 product_name=derived_title,
                 stock_quantity=0,
-                success=True,
-                message="Out of Stock (Page 404)",
+                success=False,
+                message="Product not found in inventory.",
             )
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
@@ -1257,14 +1256,13 @@ def check_stock(request: Request, url: str = Query(..., description="The product
             is_preorder = _is_preorder_product(product_details, url=target_url)
 
             if is_preorder:
-                if has_stock:
-                    pro_stock = pro_stock_raw
-                    if isinstance(pro_stock, str) and pro_stock.strip().isdigit():
-                        pro_stock = int(pro_stock.strip())
-                    elif isinstance(pro_stock, (int, float)):
-                        pro_stock = int(pro_stock)
-                    else:
-                        pro_stock = -2 if in_stock_bool else 0
+                if has_stock and (isinstance(pro_stock_raw, (int, float)) or (isinstance(pro_stock_raw, str) and pro_stock_raw.strip().isdigit())):
+                    pro_stock = int(pro_stock_raw)
+                    if numeric_id and str(numeric_id).isdigit() and pro_stock >= 0:
+                        _STOCK_CACHE[int(numeric_id)] = (pro_stock, time.time())
+                elif numeric_id and str(numeric_id).isdigit():
+                    cart_stock = _get_stock_via_cart(int(numeric_id))
+                    pro_stock = cart_stock if cart_stock is not None else (-2 if in_stock_bool else 0)
                 else:
                     pro_stock = -2 if in_stock_bool else 0
             elif has_stock:
@@ -1299,6 +1297,16 @@ def check_stock(request: Request, url: str = Query(..., description="The product
                 if raw_img:
                     img_val = raw_img if raw_img.startswith("http") else f"https://www.karzanddolls.com/karzOffice/public/assets/productimages/{raw_img}"
 
+            if not in_stock_bool or pro_stock == 0:
+                return StockResponse(
+                    product_name=pro_name,
+                    stock_quantity=0,
+                    success=False,
+                    message="Product is currently not available in inventory.",
+                    image=img_val,
+                    is_preorder=is_preorder,
+                )
+
             return StockResponse(
                 product_name=pro_name,
                 stock_quantity=pro_stock,
@@ -1319,8 +1327,8 @@ def check_stock(request: Request, url: str = Query(..., description="The product
             return StockResponse(
                 product_name=derived_title,
                 stock_quantity=0,
-                success=True,
-                message="Out of Stock (Page 404)",
+                success=False,
+                message="Product not found in inventory.",
             )
         return StockResponse(
             product_name=derived_title,

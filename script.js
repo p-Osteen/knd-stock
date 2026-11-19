@@ -46,16 +46,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterBrand = document.getElementById('filter-brand');
     const filterSubcategory = document.getElementById('filter-subcategory');
     const catalogSortSelect = document.getElementById('catalog-sort-select');
-    const filterInStockOnly = document.getElementById('filter-in-stock-only');
-    const filterResetBtn = document.getElementById('filter-reset-btn');
+        const filterResetBtn = document.getElementById('filter-reset-btn');
 
     const pillAll = document.getElementById('pill-all');
     const pillPreorders = document.getElementById('pill-preorders');
     const pillNewArrivals = document.getElementById('pill-new-arrivals');
-
-    const productDetailModal = document.getElementById('product-detail-modal');
-    const productModalClose = document.getElementById('product-modal-close');
-    const productModalBody = document.getElementById('product-modal-body');
 
     const catalogCountText = document.getElementById('catalog-count-text');
     const catalogActiveFilterTags = document.getElementById('catalog-active-filter-tags');
@@ -103,8 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         subcategory: 'all',
         sort: 'latest',
         search: '',
-        inStockOnly: false,
-        totalPages: 1,
+                totalPages: 1,
         totalCount: 0,
         loading: false
     };
@@ -435,24 +429,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const isPreorderAvailable = item.last_stock === -2;
         const isRestocked = item.prev_stock === 0 && inStock;
 
+        if (item.last_stock === 0) {
+            card.remove();
+            return;
+        }
         let bannerClass, statusLabel, icon, qtyText;
         if (isPreorder) {
-            if (inStock) {
-                bannerClass = 'stock-banner--preorder';
-                statusLabel = 'Pre-Order Open';
-                icon = 'fa-clock';
-                qtyText = isPreorderAvailable ? 'Pre-order available' : (isLow ? `Only ${item.last_stock} left` : `${item.last_stock} available`);
-            } else {
-                bannerClass = 'stock-banner--out';
-                statusLabel = 'Pre-Order Closed';
-                icon = 'fa-circle-xmark';
-                qtyText = 'Not available';
-            }
+            bannerClass = 'stock-banner--preorder';
+            statusLabel = 'PO Open';
+            icon = 'fa-clock';
+            qtyText = isPreorderAvailable ? 'Available' : (isLow ? `Only ${item.last_stock} left` : `${item.last_stock} PO Qty`);
         } else {
-            bannerClass = inStock ? (isLow ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
-            statusLabel = inStock ? (isLow ? 'Low Stock' : 'In Stock') : 'Out of Stock';
-            icon = inStock ? (isLow ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
-            qtyText = inStock ? (isUnknownQty ? 'Available' : `${item.last_stock} available`) : '0 available';
+            bannerClass = isLow ? 'stock-banner--low' : 'stock-banner--in';
+            statusLabel = isLow ? 'Low Stock' : 'In Stock';
+            icon = isLow ? 'fa-bolt' : 'fa-circle-check';
+            qtyText = isUnknownQty ? 'Available' : `${item.last_stock} in stock`;
         }
 
         const banner = card.querySelector('.stock-banner');
@@ -493,7 +484,8 @@ document.addEventListener('DOMContentLoaded', () => {
             list = list.filter(item => (item.product_name || '').toLowerCase().includes(query));
         }
 
-        if (list.length === 0) {
+        const inStockList = list.filter(item => item.last_stock > 0 || item.last_stock === -1 || item.last_stock === -2);
+        if (inStockList.length === 0) {
             watchlistEmpty.classList.remove('hidden');
             watchlistList.innerHTML = '';
             return;
@@ -502,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
         watchlistEmpty.classList.add('hidden');
         watchlistList.innerHTML = '';
 
-        list.forEach(item => {
+        inStockList.forEach(item => {
             const card = document.createElement('div');
             card.className = 'result-card';
             card.setAttribute('data-url', item.url);
@@ -518,26 +510,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 : `<div class="card-showcase-placeholder"><i class="fa-solid fa-car"></i></div>`;
 
             const priceHtml = item.price ? `<div class="floating-price-tag">${escapeHtml(item.price)}</div>` : '';
-            const preorderBadgeHtml = isPreorder ? '<span class="preorder-card-badge"><i class="fa-solid fa-clock"></i> Pre-Order</span>' : '';
+            const preorderBadgeHtml = isPreorder ? '<span class="preorder-card-badge"><i class="fa-solid fa-clock"></i> PO</span>' : '';
 
             let bannerClass, statusLabel, icon, qtyText;
             if (isPreorder) {
-                if (inStock) {
-                    bannerClass = 'stock-banner--preorder';
-                    statusLabel = 'Pre-Order Open';
-                    icon = 'fa-clock';
-                    qtyText = isPreorderAvailable ? 'Pre-order available' : `${item.last_stock} available`;
-                } else {
-                    bannerClass = 'stock-banner--out';
-                    statusLabel = 'Pre-Order Closed';
-                    icon = 'fa-circle-xmark';
-                    qtyText = 'Not available';
-                }
+                bannerClass = 'stock-banner--preorder';
+                statusLabel = 'PO Open';
+                icon = 'fa-clock';
+                qtyText = isPreorderAvailable ? 'Available' : (item.last_stock > 0 && item.last_stock <= 3 ? `Only ${item.last_stock} left` : `${item.last_stock} PO Qty`);
             } else {
-                bannerClass = inStock ? (item.last_stock > 0 && item.last_stock <= 3 ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
-                statusLabel = inStock ? (item.last_stock > 0 && item.last_stock <= 3 ? 'Low Stock' : 'In Stock') : 'Out of Stock';
-                icon = inStock ? (item.last_stock > 0 && item.last_stock <= 3 ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
-                qtyText = inStock ? (isUnknownQty ? 'Available' : `${item.last_stock} available`) : '0 available';
+                const isLow = item.last_stock > 0 && item.last_stock <= 3;
+                bannerClass = isLow ? 'stock-banner--low' : 'stock-banner--in';
+                statusLabel = isLow ? 'Low Stock' : 'In Stock';
+                icon = isLow ? 'fa-bolt' : 'fa-circle-check';
+                qtyText = isUnknownQty ? 'Available' : (isLow ? `Only ${item.last_stock} left` : `${item.last_stock} in stock`);
             }
             const restockTag = isRestocked ? '<span class="restock-badge"><i class="fa-solid fa-sparkles"></i> Restocked!</span>' : '';
 
@@ -561,8 +547,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="card-footer">
-                    <a href="${escapeHtml(item.url)}" target="_blank" class="cta-btn cta-btn--primary" title="View on Karz and Dolls">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> View Store
+                    <a href="${escapeHtml(item.url)}" target="_blank" class="cta-btn ${isPreorder ? 'cta-btn--preorder' : 'cta-btn--primary'}" rel="noopener" title="Open on Karz and Dolls">
+                        <i class="fa-solid ${isPreorder ? 'fa-clock' : 'fa-cart-shopping'}"></i> ${isPreorder ? 'PO Now' : 'Buy Now'}
                     </a>
                     <button type="button" class="wl-single-check-btn" title="Check live stock now">
                         <i class="fa-solid fa-rotate-right"></i> Check
@@ -595,7 +581,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     const data = await res.json();
-                    if (data.success) {
+                    if (data.success && data.stock_quantity !== 0) {
                         item.prev_stock = item.last_stock;
                         item.last_stock = data.stock_quantity;
                         if (data.is_preorder) item.is_preorder = true;
@@ -605,13 +591,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         updateWatchlistCardElement(card, item);
                         let toastMsg;
                         if (data.is_preorder) {
-                            toastMsg = data.stock_quantity === -2 ? 'Pre-Order Open (qty hidden)' : (data.stock_quantity > 0 ? `Pre-Order — ${data.stock_quantity} available` : 'Pre-Order Closed');
+                            toastMsg = data.stock_quantity === -2 ? 'PO Open (qty hidden)' : `PO — ${data.stock_quantity} available`;
                         } else {
-                            toastMsg = data.stock_quantity === -1 ? 'In Stock (qty hidden by store)' : `Updated stock: ${data.stock_quantity} available`;
+                            toastMsg = data.stock_quantity === -1 ? 'In Stock (qty hidden by store)' : `Updated stock: ${data.stock_quantity}`;
                         }
                         showToast(toastMsg, 'success');
                     } else {
-                        showToast(data.message || 'Lookup failed', 'error');
+                        const updatedList = list.filter(w => w.url !== item.url);
+                        saveWatchlist(updatedList);
+                        card.remove();
+                        if (updatedList.length === 0 && watchlistEmpty) {
+                            watchlistEmpty.classList.remove('hidden');
+                        }
+                        showToast(data.message || 'Product is currently not available in inventory.', 'error');
                     }
                 } catch {
                     showToast('Failed to check stock', 'error');
@@ -833,11 +825,38 @@ document.addEventListener('DOMContentLoaded', () => {
             const json = await res.json();
             if (json.success && Array.isArray(json.categories)) {
                 liveCategoriesTree = json.categories;
+                populateCategoryDropdown();
                 populateBrandDropdown(true);
                 populateSubcategoryDropdown(true);
             }
         } catch (err) {
             console.warn('Could not fetch categories tree', err);
+        }
+    }
+
+    function populateCategoryDropdown() {
+        if (!filterCategory) return;
+        const currentCat = filterCategory.value || 'cars';
+        if (Array.isArray(liveCategoriesTree) && liveCategoriesTree.length > 0) {
+            const sortedCats = [...liveCategoriesTree].sort((a, b) =>
+                (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+            );
+            filterCategory.innerHTML = '';
+            sortedCats.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat.slug;
+                opt.textContent = cat.name;
+                filterCategory.appendChild(opt);
+            });
+            const hasCurrent = Array.from(filterCategory.options).some(o => o.value === currentCat);
+            filterCategory.value = hasCurrent ? currentCat : (filterCategory.options[0]?.value || 'cars');
+            catalogState.category = filterCategory.value;
+        } else {
+            const options = Array.from(filterCategory.options);
+            options.sort((a, b) => (a.textContent || '').localeCompare(b.textContent || '', undefined, { sensitivity: 'base' }));
+            filterCategory.innerHTML = '';
+            options.forEach(opt => filterCategory.appendChild(opt));
+            filterCategory.value = currentCat;
         }
     }
 
@@ -853,7 +872,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const catObj = getSelectedCategoryObj();
         if (catObj && Array.isArray(catObj.subcategories) && catObj.subcategories.length > 0) {
-            catObj.subcategories.forEach(sub => {
+            const sortedBrands = [...catObj.subcategories].sort((a, b) =>
+                (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+            );
+            sortedBrands.forEach(sub => {
                 const opt = document.createElement('option');
                 opt.value = sub.slug;
                 opt.textContent = sub.name;
@@ -884,7 +906,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const brandObj = (catObj.subcategories || []).find(s => s.slug === brandSlug);
             if (brandObj) {
                 if (Array.isArray(brandObj.series) && brandObj.series.length > 0) {
-                    brandObj.series.forEach(ser => {
+                    const sortedSeries = [...brandObj.series].sort((a, b) =>
+                        (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+                    );
+                    sortedSeries.forEach(ser => {
                         const opt = document.createElement('option');
                         opt.value = ser.slug || brandSlug;
                         opt.textContent = ser.name;
@@ -946,13 +971,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (filterInStockOnly) {
-        filterInStockOnly.addEventListener('change', () => {
-            catalogState.inStockOnly = filterInStockOnly.checked;
-            catalogState.page = 1;
-            fetchCatalog();
-        });
-    }
 
     function setActivePill(activePillId) {
         [pillAll, pillPreorders, pillNewArrivals].forEach(p => {
@@ -979,7 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (catalogClearSearch) catalogClearSearch.classList.add('hidden');
             catalogState.page = 1;
             fetchCatalog();
-            showToast('Showing Pre-Order lineups 🔥', 'info');
+            showToast('Showing PO lineups 🔥', 'info');
         });
     }
 
@@ -1017,8 +1035,6 @@ document.addEventListener('DOMContentLoaded', () => {
         populateSubcategoryDropdown(true);
         if (catalogSortSelect) catalogSortSelect.value = 'latest';
         catalogState.sort = 'latest';
-        if (filterInStockOnly) filterInStockOnly.checked = false;
-        catalogState.inStockOnly = false;
         setActivePill('pill-all');
         if (catalogSearchInput) catalogSearchInput.value = '';
         if (catalogClearSearch) catalogClearSearch.classList.add('hidden');
@@ -1158,9 +1174,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 catalogGrid.appendChild(createProductCard(product));
                 if (catalogCountText) catalogCountText.textContent = `Showing 1 direct product lookup`;
+                if (!data.success || !data.stock_quantity || data.stock_quantity === 0) {
+                    showToast('Product is currently not available in inventory.', 'error');
+                    if (catalogEmpty) catalogEmpty.classList.remove('hidden');
+                    return;
+                }
                 let stockMsg;
                 if (data.is_preorder) {
-                    stockMsg = data.stock_quantity === -2 ? 'Pre-Order Open (qty hidden by store)' : (data.stock_quantity > 0 ? `Pre-Order — ${data.stock_quantity} available` : 'Pre-Order Closed');
+                    stockMsg = data.stock_quantity === -2 ? 'PO Open (qty hidden by store)' : `PO — ${data.stock_quantity} available`;
                 } else {
                     stockMsg = data.stock_quantity === -1 ? 'In Stock (qty hidden by store)' : `Live stock count: ${data.stock_quantity}`;
                 }
@@ -1210,7 +1231,6 @@ document.addEventListener('DOMContentLoaded', () => {
             subcategory: catalogState.subcategory === 'all' ? '' : catalogState.subcategory,
             search: catalogState.search,
             sort: catalogState.sort,
-            in_stock_only: catalogState.inStockOnly ? 'true' : 'false',
             page: catalogState.page,
             limit: catalogState.limit
         });
@@ -1294,19 +1314,6 @@ document.addEventListener('DOMContentLoaded', () => {
             catalogActiveFilterTags.appendChild(tag);
         }
 
-        if (catalogState.inStockOnly) {
-            const tag = document.createElement('span');
-            tag.className = 'catalog-filter-tag';
-            tag.innerHTML = `<i class="fa-solid fa-box-open"></i> In Stock Only <i class="fa-solid fa-xmark"></i>`;
-            tag.title = 'Click to show all items';
-            tag.addEventListener('click', () => {
-                if (filterInStockOnly) filterInStockOnly.checked = false;
-                catalogState.inStockOnly = false;
-                catalogState.page = 1;
-                fetchCatalog();
-            });
-            catalogActiveFilterTags.appendChild(tag);
-        }
 
         if (catalogState.category === 'new-arrivals') {
             const tag = document.createElement('span');
@@ -1324,29 +1331,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateCatalogCardStock(card, stockQty, isPreorder = false) {
         if (!card) return;
-        const inStock = stockQty > 0 || stockQty === -1 || stockQty === -2;
+        if (stockQty === 0) {
+            card.remove();
+            return;
+        }
+        const isCardPreorder = isPreorder || Boolean(card.querySelector('.preorder-card-badge'));
         const isLow = stockQty > 0 && stockQty <= 3;
         const isUnknownQty = stockQty === -1;
         const isPreorderAvailable = stockQty === -2;
 
         let bannerClass, statusLabel, icon, qtyText;
-        if (isPreorder || isPreorderAvailable) {
-            if (inStock) {
-                bannerClass = 'stock-banner--preorder';
-                statusLabel = 'Pre-Order Open';
-                icon = 'fa-clock';
-                qtyText = isPreorderAvailable ? 'Pre-order available' : (isLow ? `Only ${stockQty} left` : `${Number(stockQty).toLocaleString()} available`);
-            } else {
-                bannerClass = 'stock-banner--out';
-                statusLabel = 'Pre-Order Closed';
-                icon = 'fa-circle-xmark';
-                qtyText = 'Not available';
-            }
+        if (isCardPreorder || isPreorderAvailable) {
+            bannerClass = 'stock-banner--preorder';
+            statusLabel = 'PO Open';
+            icon = 'fa-clock';
+            qtyText = isPreorderAvailable ? 'Available' : (isLow ? `Only ${stockQty} left` : `${Number(stockQty).toLocaleString()} PO Qty`);
         } else {
-            bannerClass = inStock ? (isLow ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
-            statusLabel = inStock ? (isLow ? 'Low Stock' : 'In Stock') : 'Out of Stock';
-            icon = inStock ? (isLow ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
-            qtyText = inStock ? (isUnknownQty ? 'Available' : (isLow ? `Only ${stockQty} left` : `${Number(stockQty).toLocaleString()} available`)) : '0 available';
+            bannerClass = isLow ? 'stock-banner--low' : 'stock-banner--in';
+            statusLabel = isLow ? 'Low Stock' : 'In Stock';
+            icon = isLow ? 'fa-bolt' : 'fa-circle-check';
+            qtyText = isUnknownQty ? 'Available' : (isLow ? `Only ${stockQty} left` : `${Number(stockQty).toLocaleString()} in stock`);
         }
 
         const banner = card.querySelector('.stock-banner');
@@ -1366,14 +1370,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const ctaBtn = card.querySelector('.cta-btn');
         if (ctaBtn) {
-            ctaBtn.className = `cta-btn ${inStock ? 'cta-btn--primary' : 'cta-btn--ghost'}`;
-            ctaBtn.innerHTML = `<i class="fa-solid ${inStock ? 'fa-cart-shopping' : 'fa-arrow-up-right-from-square'}"></i> ${inStock ? 'Buy on Store' : 'View on Store'}`;
+            ctaBtn.className = `cta-btn ${isCardPreorder ? 'cta-btn--preorder' : 'cta-btn--primary'}`;
+            ctaBtn.innerHTML = `<i class="fa-solid ${isCardPreorder ? 'fa-clock' : 'fa-cart-shopping'}"></i> ${isCardPreorder ? 'PO Now' : 'Buy Now'}`;
         }
     }
 
     async function resolveCatalogStockCounts(products) {
         if (!Array.isArray(products) || !catalogGrid) return;
-        const unknownItems = products.filter(p => p.stock_quantity === -1 && p.product_id);
+        const unknownItems = products.filter(p => (p.stock_quantity === -1 || p.stock_quantity === -2) && p.product_id);
         if (unknownItems.length === 0) return;
 
         if (activeBatchStockController) {
@@ -1397,7 +1401,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (item) item.stock_quantity = qty;
                     const card = catalogGrid.querySelector(`[data-product-id="${pid}"]`);
                     if (card) {
-                        updateCatalogCardStock(card, qty);
+                        updateCatalogCardStock(card, qty, Boolean(item && item.is_preorder));
                     }
                 });
             }
@@ -1410,14 +1414,22 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderCatalogGrid(products) {
         if (!catalogGrid) return;
         catalogGrid.innerHTML = '';
-        products.forEach(p => {
-            catalogGrid.appendChild(createProductCard(p));
+        const inStockProducts = (products || []).filter(p => p && p.in_stock && p.stock_quantity !== 0);
+        inStockProducts.forEach(p => {
+            const card = createProductCard(p);
+            if (card) catalogGrid.appendChild(card);
         });
+        if (inStockProducts.length === 0 && catalogEmpty) {
+            catalogEmpty.classList.remove('hidden');
+        }
         updateAllCardStarStates();
-        resolveCatalogStockCounts(products);
+        resolveCatalogStockCounts(inStockProducts);
     }
 
     function createProductCard(product) {
+        if (!product || !product.in_stock || product.stock_quantity === 0) {
+            return null;
+        }
         const card = document.createElement('div');
         card.className = 'result-card';
         card.setAttribute('data-url', product.url);
@@ -1426,29 +1438,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const isPreorder = Boolean(product.is_preorder);
-        const inStock = product.stock_quantity > 0 || product.stock_quantity === -1 || product.stock_quantity === -2;
         const isLow = product.stock_quantity > 0 && product.stock_quantity <= 3;
         const isUnknownQty = product.stock_quantity === -1;
         const isPreorderAvailable = product.stock_quantity === -2;
 
         let bannerClass, statusLabel, icon, qtyText;
         if (isPreorder) {
-            if (inStock) {
-                bannerClass = 'stock-banner--preorder';
-                statusLabel = 'Pre-Order Open';
-                icon = 'fa-clock';
-                qtyText = isPreorderAvailable ? 'Pre-order available' : (isLow ? `Only ${product.stock_quantity} left` : `${Number(product.stock_quantity).toLocaleString()} available`);
-            } else {
-                bannerClass = 'stock-banner--out';
-                statusLabel = 'Pre-Order Closed';
-                icon = 'fa-circle-xmark';
-                qtyText = 'Not available';
-            }
+            bannerClass = 'stock-banner--preorder';
+            statusLabel = 'PO Open';
+            icon = 'fa-clock';
+            qtyText = isPreorderAvailable ? 'Available' : (isLow ? `Only ${product.stock_quantity} left` : `${Number(product.stock_quantity).toLocaleString()} PO Qty`);
         } else {
-            bannerClass = inStock ? (isLow ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
-            statusLabel = inStock ? (isLow ? 'Low Stock' : 'In Stock') : 'Out of Stock';
-            icon = inStock ? (isLow ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
-            qtyText = inStock ? (isUnknownQty ? 'Available' : (isLow ? `Only ${product.stock_quantity} left` : `${Number(product.stock_quantity).toLocaleString()} available`)) : '0 available';
+            bannerClass = isLow ? 'stock-banner--low' : 'stock-banner--in';
+            statusLabel = isLow ? 'Low Stock' : 'In Stock';
+            icon = isLow ? 'fa-bolt' : 'fa-circle-check';
+            qtyText = isUnknownQty ? 'Available' : (isLow ? `Only ${product.stock_quantity} left` : `${Number(product.stock_quantity).toLocaleString()} in stock`);
         }
 
         const watchlistItem = getWatchlist().find(w => w.url === product.url);
@@ -1462,7 +1466,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const saved = isWatchlisted(product.url);
 
-        const preorderBadgeHtml = isPreorder ? '<span class="preorder-card-badge"><i class="fa-solid fa-clock"></i> Pre-Order</span>' : '';
+        const preorderBadgeHtml = isPreorder ? '<span class="preorder-card-badge"><i class="fa-solid fa-clock"></i> PO</span>' : '';
 
         card.innerHTML = `
             <div class="card-showcase">
@@ -1484,12 +1488,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
             <div class="card-footer">
-                <a href="${escapeHtml(product.url)}" target="_blank" class="cta-btn ${inStock ? (isPreorder ? 'cta-btn--preorder' : 'cta-btn--primary') : 'cta-btn--ghost'}" rel="noopener" title="Open on Karz and Dolls">
-                    <i class="fa-solid ${inStock ? (isPreorder ? 'fa-clock' : 'fa-cart-shopping') : 'fa-arrow-up-right-from-square'}"></i> ${inStock ? (isPreorder ? 'Pre-Order Now' : 'Buy on Store') : 'View on Store'}
+                <a href="${escapeHtml(product.url)}" target="_blank" class="cta-btn ${isPreorder ? 'cta-btn--preorder' : 'cta-btn--primary'}" rel="noopener" title="Open on Karz and Dolls">
+                    <i class="fa-solid ${isPreorder ? 'fa-clock' : 'fa-cart-shopping'}"></i> ${isPreorder ? 'PO Now' : 'Buy Now'}
                 </a>
-                <button type="button" class="card-icon-btn detail-btn" title="View specs, photos & details">
-                    <i class="fa-solid fa-circle-info"></i>
-                </button>
                 <button type="button" class="card-icon-btn card-star-btn ${saved ? 'is-active' : ''}" title="${saved ? 'Remove from Watchlist' : 'Save to Watchlist'}">
                     <i class="${saved ? 'fa-solid' : 'fa-regular'} fa-bookmark"></i>
                 </button>
@@ -1499,20 +1500,12 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
-        const detailBtn = card.querySelector('.detail-btn');
-        if (detailBtn) {
-            detailBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openProductDetailModal(product.url);
-            });
-        }
-
         const showcase = card.querySelector('.card-showcase');
         if (showcase) {
             showcase.style.cursor = 'pointer';
-            showcase.title = 'Click to view product details & photos';
+            showcase.title = 'Open on Karz and Dolls';
             showcase.addEventListener('click', () => {
-                openProductDetailModal(product.url);
+                window.open(product.url, '_blank', 'noopener');
             });
         }
 
@@ -1533,230 +1526,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         return card;
-    }
-
-    function closeProductDetailModal() {
-        if (!productDetailModal) return;
-        productDetailModal.classList.remove('visible');
-        productDetailModal.setAttribute('aria-hidden', 'true');
-    }
-
-    if (productModalClose) {
-        productModalClose.addEventListener('click', closeProductDetailModal);
-    }
-    if (productDetailModal) {
-        productDetailModal.addEventListener('click', (e) => {
-            if (e.target === productDetailModal) closeProductDetailModal();
-        });
-    }
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeProductDetailModal();
-    });
-
-    async function openProductDetailModal(targetUrl) {
-        if (document.body.classList.contains('not-authenticated')) {
-            showAuthGate();
-            return;
-        }
-        if (!productDetailModal || !productModalBody) return;
-        productDetailModal.classList.add('visible');
-        productDetailModal.setAttribute('aria-hidden', 'false');
-        productModalBody.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:3rem 1rem; gap:1rem;">
-                <div class="spinner-large"></div>
-                <div style="font-weight:600; color:var(--text-secondary); font-size:0.95rem;">Loading rich product specifications…</div>
-            </div>
-        `;
-
-        try {
-            const res = await fetch(`${BACKEND_URL}/api/product-detail?url=${encodeURIComponent(targetUrl)}`, {
-                credentials: 'include',
-                headers: getAuthHeaders()
-            });
-            if (res.status === 401) {
-                closeProductDetailModal();
-                handleApiUnauthorized();
-                return;
-            }
-            const data = await res.json();
-            if (!data.success && !data.product_name) {
-                productModalBody.innerHTML = `
-                    <div style="text-align:center; padding:2rem;">
-                        <i class="fa-solid fa-triangle-exclamation text-amber" style="font-size:2rem; margin-bottom:0.75rem;"></i>
-                        <h3 style="color:var(--text-primary); margin-bottom:0.5rem;">Could not load details</h3>
-                        <p style="color:var(--text-muted); font-size:0.9rem;">${escapeHtml(data.message || 'Product data not found')}</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const isPreorder = Boolean(data.is_preorder);
-            const inStock = data.stock_quantity > 0 || data.stock_quantity === -1 || data.stock_quantity === -2;
-            const isLow = data.stock_quantity > 0 && data.stock_quantity <= 3;
-            const isUnknown = data.stock_quantity === -1;
-            const isPreorderAvail = data.stock_quantity === -2;
-
-            let bannerClass, statusLabel, icon, qtyText;
-            if (isPreorder) {
-                if (inStock) {
-                    bannerClass = 'stock-banner--preorder';
-                    statusLabel = 'Pre-Order Open';
-                    icon = 'fa-clock';
-                    qtyText = isPreorderAvail ? 'Pre-order available' : (isLow ? `Only ${data.stock_quantity} left` : `${data.stock_quantity} available`);
-                } else {
-                    bannerClass = 'stock-banner--out';
-                    statusLabel = 'Pre-Order Closed';
-                    icon = 'fa-circle-xmark';
-                    qtyText = 'Not available';
-                }
-            } else {
-                bannerClass = inStock ? (isLow ? 'stock-banner--low' : 'stock-banner--in') : 'stock-banner--out';
-                statusLabel = inStock ? (isLow ? 'Low Stock' : 'In Stock') : 'Out of Stock';
-                icon = inStock ? (isLow ? 'fa-bolt' : 'fa-circle-check') : 'fa-circle-xmark';
-                qtyText = inStock ? (isUnknown ? 'Available' : `${data.stock_quantity} available`) : '0 available';
-            }
-
-            const images = Array.isArray(data.images) && data.images.length > 0
-                ? data.images
-                : (data.images ? [data.images] : []);
-
-            const mainImageSrc = images.length > 0 ? images[0] : '';
-            const thumbsHtml = images.length > 1
-                ? `<div class="product-modal-gallery">
-                    ${images.map((img, idx) => `<img src="${escapeHtml(img)}" class="product-modal-thumb ${idx === 0 ? 'active' : ''}" data-idx="${idx}" alt="Photo ${idx + 1}" />`).join('')}
-                   </div>`
-                : '';
-
-            const discountBadgeHtml = data.discount_percent
-                ? `<span style="background:rgba(16,185,129,0.18); color:#34d399; border:1px solid rgba(16,185,129,0.4); font-size:0.75rem; font-weight:800; padding:0.2rem 0.55rem; border-radius:9999px;">${escapeHtml(data.discount_percent)}</span>`
-                : '';
-
-            const actPriceHtml = data.actual_price && data.actual_price !== data.price
-                ? `<span style="color:var(--text-muted); text-decoration:line-through; font-size:0.95rem; font-weight:600;">${escapeHtml(data.actual_price)}</span>`
-                : '';
-
-            const descHtml = data.description
-                ? `<div class="product-modal-desc">${escapeHtml(data.description)}</div>`
-                : '';
-
-            productModalBody.innerHTML = `
-                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                    ${isPreorder ? '<span class="preorder-card-badge" style="position:static;"><i class="fa-solid fa-clock"></i> Pre-Order</span>' : ''}
-                    ${data.brand ? `<span style="font-size:0.75rem; background:rgba(255,255,255,0.08); padding:0.2rem 0.6rem; border-radius:9999px; color:var(--text-secondary); font-weight:700;">${escapeHtml(data.brand)}</span>` : ''}
-                    ${data.category ? `<span style="font-size:0.75rem; background:rgba(99,102,241,0.12); padding:0.2rem 0.6rem; border-radius:9999px; color:#a5b4fc; font-weight:700;">${escapeHtml(data.category)}</span>` : ''}
-                </div>
-
-                <h3 style="color:var(--text-primary); font-size:1.35rem; font-weight:800; line-height:1.3; margin:0.35rem 0;">
-                    ${escapeHtml(data.product_name)}
-                </h3>
-
-                <div class="product-modal-main-img-wrap">
-                    ${mainImageSrc
-                        ? `<img src="${escapeHtml(mainImageSrc)}" id="modal-main-image" class="product-modal-main-img" alt="${escapeHtml(data.product_name)}" />`
-                        : `<i class="fa-solid fa-car" style="font-size:3.5rem; color:var(--text-muted);"></i>`}
-                </div>
-                ${thumbsHtml}
-
-                <div style="display:flex; align-items:baseline; gap:0.75rem; flex-wrap:wrap; margin:0.4rem 0;">
-                    <span style="font-size:1.6rem; font-weight:900; color:var(--text-primary);">${escapeHtml(data.price || 'Price on Store')}</span>
-                    ${actPriceHtml}
-                    ${discountBadgeHtml}
-                </div>
-
-                <div class="stock-banner ${bannerClass}" style="margin:0;">
-                    <div class="stock-banner__status">
-                        <i class="fa-solid ${icon}"></i>
-                        <span>${statusLabel}</span>
-                    </div>
-                    <div class="stock-banner__qty">
-                        <span class="stock-banner__count">${qtyText}</span>
-                    </div>
-                </div>
-
-                <div class="product-modal-meta-grid">
-                    <div class="product-meta-item">
-                        <span class="product-meta-key">Brand</span>
-                        <span class="product-meta-val">${escapeHtml(data.brand || 'Karz & Dolls')}</span>
-                    </div>
-                    <div class="product-meta-item">
-                        <span class="product-meta-key">Lineup</span>
-                        <span class="product-meta-val">${escapeHtml(data.subcategory || 'General')}</span>
-                    </div>
-                    <div class="product-meta-item">
-                        <span class="product-meta-key">SKU / ID</span>
-                        <span class="product-meta-val">${escapeHtml(data.sku || (data.product_id ? String(data.product_id) : '—'))}</span>
-                    </div>
-                    <div class="product-meta-item">
-                        <span class="product-meta-key">Stock Status</span>
-                        <span class="product-meta-val" style="color:${inStock ? '#34d399' : '#f87171'};">${statusLabel}</span>
-                    </div>
-                </div>
-
-                ${descHtml}
-
-                <div style="display:flex; gap:0.6rem; margin-top:0.5rem; flex-wrap:wrap;">
-                    <a href="${escapeHtml(data.url)}" target="_blank" class="cta-btn ${inStock ? (isPreorder ? 'cta-btn--preorder' : 'cta-btn--primary') : 'cta-btn--ghost'}" style="flex:1;" rel="noopener">
-                        <i class="fa-solid ${inStock ? (isPreorder ? 'fa-clock' : 'fa-cart-shopping') : 'fa-arrow-up-right-from-square'}"></i> ${inStock ? (isPreorder ? 'Pre-Order on Karz & Dolls' : 'Buy on Karz & Dolls') : 'View on Store'}
-                    </a>
-                    <button type="button" class="mini-tool-btn" id="modal-bookmark-btn" title="Save to Watchlist">
-                        <i class="${isWatchlisted(data.url) ? 'fa-solid' : 'fa-regular'} fa-bookmark"></i>
-                        <span>${isWatchlisted(data.url) ? 'Saved' : 'Watchlist'}</span>
-                    </button>
-                    <button type="button" class="mini-tool-btn" id="modal-copy-btn" title="Copy link">
-                        <i class="fa-regular fa-clone"></i>
-                        <span>Copy Link</span>
-                    </button>
-                </div>
-            `;
-
-            const mainImg = productModalBody.querySelector('#modal-main-image');
-            const thumbs = productModalBody.querySelectorAll('.product-modal-thumb');
-            thumbs.forEach(t => {
-                t.addEventListener('click', () => {
-                    thumbs.forEach(x => x.classList.remove('active'));
-                    t.classList.add('active');
-                    if (mainImg) mainImg.src = t.src;
-                });
-            });
-
-            const bmBtn = productModalBody.querySelector('#modal-bookmark-btn');
-            if (bmBtn) {
-                bmBtn.addEventListener('click', () => {
-                    const added = toggleWatchlistItem({
-                        url: data.url,
-                        product_name: data.product_name,
-                        image: mainImageSrc,
-                        price: data.price,
-                        stock_quantity: data.stock_quantity,
-                        is_preorder: isPreorder
-                    });
-                    const iconI = bmBtn.querySelector('i');
-                    const spanT = bmBtn.querySelector('span');
-                    if (iconI) iconI.className = `${added ? 'fa-solid' : 'fa-regular'} fa-bookmark`;
-                    if (spanT) spanT.textContent = added ? 'Saved' : 'Watchlist';
-                    showToast(added ? 'Added to Watchlist ⭐' : 'Removed from Watchlist', added ? 'success' : 'info');
-                });
-            }
-
-            const copyBtn = productModalBody.querySelector('#modal-copy-btn');
-            if (copyBtn) {
-                copyBtn.addEventListener('click', () => {
-                    if (navigator.clipboard) {
-                        navigator.clipboard.writeText(data.url);
-                        showToast('Link copied to clipboard!', 'success');
-                    }
-                });
-            }
-        } catch (err) {
-            console.error('Modal error:', err);
-            productModalBody.innerHTML = `
-                <div style="text-align:center; padding:2rem;">
-                    <i class="fa-solid fa-circle-exclamation text-rose" style="font-size:2rem; margin-bottom:0.75rem;"></i>
-                    <h3 style="color:var(--text-primary); margin-bottom:0.5rem;">Network Error</h3>
-                    <p style="color:var(--text-muted); font-size:0.9rem;">Could not load product details from server.</p>
-                </div>
-            `;
-        }
     }
 
     function renderPagination(currentPage, totalPages, totalCount) {
