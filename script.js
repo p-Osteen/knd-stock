@@ -1005,12 +1005,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (pillPreorders) {
-        pillPreorders.addEventListener('click', () => {
+        pillPreorders.addEventListener('click', async () => {
             setActivePill('pill-preorders');
-            if (filterCategory) filterCategory.value = 'specials';
-            catalogState.category = 'specials';
-            populateBrandDropdown(true);
-            populateSubcategoryDropdown(true);
+            if (!liveCategoriesTree || liveCategoriesTree.length === 0) {
+                await fetchCategoriesTree();
+            }
+            if (filterCategory) filterCategory.value = 'cars';
+            catalogState.category = 'cars';
+            populateBrandDropdown();
+            if (filterBrand) {
+                const preOrderOpt = Array.from(filterBrand.options).find(o =>
+                    o.value.toLowerCase() === 'pre-orders' ||
+                    o.textContent.trim().toLowerCase() === 'pre-orders'
+                );
+                if (preOrderOpt) {
+                    filterBrand.value = preOrderOpt.value;
+                } else if (filterBrand.options.length > 0) {
+                    filterBrand.value = 'pre-orders';
+                }
+                catalogState.brand = filterBrand.value;
+            }
+            populateSubcategoryDropdown();
+            if (filterSubcategory) {
+                const miniGtOpt = Array.from(filterSubcategory.options).find(o =>
+                    o.value.toLowerCase() === 'pre-order-minigt' ||
+                    o.textContent.trim().toLowerCase().includes('minigt')
+                );
+                if (miniGtOpt) {
+                    filterSubcategory.value = miniGtOpt.value;
+                } else if (filterSubcategory.options.length > 0) {
+                    filterSubcategory.value = 'pre-order-minigt';
+                }
+                catalogState.subcategory = filterSubcategory.value;
+            }
+            if (catalogSortSelect) catalogSortSelect.value = 'latest';
+            catalogState.sort = 'latest';
             catalogState.search = '';
             if (catalogSearchInput) catalogSearchInput.value = '';
             if (catalogClearSearch) catalogClearSearch.classList.add('hidden');

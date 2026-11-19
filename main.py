@@ -892,7 +892,11 @@ def get_catalog(
             if not all_products:
                 all_products = _fetch_lineup_products("https://www.karzanddolls.com/", default_brand="New Arrivals")
         elif category in PREORDER_SLUGS or brand in PREORDER_SLUGS:
-            all_products = _fetch_lineup_products("https://www.karzanddolls.com/pre-orders/pre-order-minigt", default_brand="Pre-Orders", default_subcat="Mini GT Pre-orders")
+            s_slug = subcategory.strip() if subcategory and subcategory.lower() != "all" else "pre-order-minigt"
+            target_url = f"https://www.karzanddolls.com/pre-orders/{s_slug}"
+            all_products = _fetch_lineup_products(target_url, default_brand="Pre-Orders", default_subcat=s_slug)
+            if not all_products and s_slug != "pre-order-minigt":
+                all_products = _fetch_lineup_products("https://www.karzanddolls.com/pre-orders/pre-order-minigt", default_brand="Pre-Orders", default_subcat="Mini GT Pre-orders")
         elif brand and brand.lower() != "all":
             b_slug = brand.strip()
             s_slug = subcategory.strip() if subcategory and subcategory.lower() != "all" else b_slug
