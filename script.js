@@ -813,21 +813,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchCategoriesTree() {
+        let cachedHash = '';
         try {
+            const cached = sessionStorage.getItem('knd_categories_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && Array.isArray(parsed.categories) && parsed.categories.length > 0) {
+                    liveCategoriesTree = parsed.categories;
+                    cachedHash = parsed.hash || '';
+                    populateCategoryDropdown();
+                    populateBrandDropdown();
+                    populateSubcategoryDropdown();
+                }
+            }
+        } catch {}
+
+        try {
+            const headers = getAuthHeaders();
+            if (cachedHash) {
+                headers['If-None-Match'] = `"${cachedHash}"`;
+            }
             const res = await fetch(`${BACKEND_URL}/api/categories`, {
                 credentials: 'include',
-                headers: getAuthHeaders()
+                headers: headers
             });
             if (res.status === 401) {
                 handleApiUnauthorized();
                 return;
             }
+            if (res.status === 304) {
+                return;
+            }
             const json = await res.json();
             if (json.success && Array.isArray(json.categories)) {
-                liveCategoriesTree = json.categories;
-                populateCategoryDropdown();
-                populateBrandDropdown(true);
-                populateSubcategoryDropdown(true);
+                const newHash = json.hash || (res.headers.get('ETag') || '').replace(/"/g, '') || '';
+                if (newHash !== cachedHash || !liveCategoriesTree || liveCategoriesTree.length === 0) {
+                    liveCategoriesTree = json.categories;
+                    try {
+                        sessionStorage.setItem('knd_categories_cache', JSON.stringify({
+                            categories: json.categories,
+                            hash: newHash
+                        }));
+                    } catch {}
+                    populateCategoryDropdown();
+                    populateBrandDropdown();
+                    populateSubcategoryDropdown();
+                }
             }
         } catch (err) {
             console.warn('Could not fetch categories tree', err);
@@ -838,11 +869,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!filterCategory) return;
         const currentCat = filterCategory.value || 'cars';
         if (Array.isArray(liveCategoriesTree) && liveCategoriesTree.length > 0) {
-            const sortedCats = [...liveCategoriesTree].sort((a, b) =>
-                (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
-            );
             filterCategory.innerHTML = '';
-            sortedCats.forEach(cat => {
+            liveCategoriesTree.forEach(cat => {
                 const opt = document.createElement('option');
                 opt.value = cat.slug;
                 opt.textContent = cat.name;
@@ -852,10 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
             filterCategory.value = hasCurrent ? currentCat : (filterCategory.options[0]?.value || 'cars');
             catalogState.category = filterCategory.value;
         } else {
-            const options = Array.from(filterCategory.options);
-            options.sort((a, b) => (a.textContent || '').localeCompare(b.textContent || '', undefined, { sensitivity: 'base' }));
             filterCategory.innerHTML = '';
-            options.forEach(opt => filterCategory.appendChild(opt));
             filterCategory.value = currentCat;
         }
     }
@@ -872,10 +897,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const catObj = getSelectedCategoryObj();
         if (catObj && Array.isArray(catObj.subcategories) && catObj.subcategories.length > 0) {
-            const sortedBrands = [...catObj.subcategories].sort((a, b) =>
-                (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
-            );
-            sortedBrands.forEach(sub => {
+            catObj.subcategories.forEach(sub => {
                 const opt = document.createElement('option');
                 opt.value = sub.slug;
                 opt.textContent = sub.name;
@@ -906,10 +928,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const brandObj = (catObj.subcategories || []).find(s => s.slug === brandSlug);
             if (brandObj) {
                 if (Array.isArray(brandObj.series) && brandObj.series.length > 0) {
-                    const sortedSeries = [...brandObj.series].sort((a, b) =>
-                        (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
-                    );
-                    sortedSeries.forEach(ser => {
+                    brandObj.series.forEach(ser => {
                         const opt = document.createElement('option');
                         opt.value = ser.slug || brandSlug;
                         opt.textContent = ser.name;
@@ -1605,8 +1624,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isAppInitialized) return;
         isAppInitialized = true;
         updateWatchlistBadge();
-        await fetchCategoriesTree();
-        await fetchCatalog();
+        await Promise.all([
+            fetchCategoriesTree(),
+            fetchCatalog()
+        ]);
     }
 
     async function startApplication() {

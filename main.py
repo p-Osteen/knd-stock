@@ -8,7 +8,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -742,8 +742,8 @@ def unpack_collection(request: Request, url: str = Query(..., description="Karz 
         return SearchResponse(products=[], success=False, message=f"Error unpacking URL: {_clean_error_message(e)}")
 
 
-_CATEGORY_CACHE: dict = {"data": None, "timestamp": 0}
-CATEGORY_CACHE_TTL = 3600
+_CATEGORY_CACHE: dict = {"data": None, "hash": "", "timestamp": 0}
+CATEGORY_CACHE_TTL = 300
 
 
 @app.get("/api/categories")
@@ -751,13 +751,33 @@ CATEGORY_CACHE_TTL = 3600
 def get_categories(request: Request):
     if not check_authenticated(request):
         raise HTTPException(status_code=401, detail="Unauthorized. Please enter password.")
+
+    client_etag = request.headers.get("if-none-match", "").strip('"')
     now = time.time()
+
     if _CATEGORY_CACHE["data"] and (now - _CATEGORY_CACHE["timestamp"] < CATEGORY_CACHE_TTL):
-        return {"success": True, "categories": _CATEGORY_CACHE["data"]}
+        cached_hash = _CATEGORY_CACHE.get("hash", "")
+        if client_etag and client_etag == cached_hash:
+            return Response(status_code=304, headers={"ETag": f'"{cached_hash}"'})
+        return JSONResponse(
+            content={"success": True, "categories": _CATEGORY_CACHE["data"], "hash": cached_hash},
+            headers={"ETag": f'"{cached_hash}"'}
+        )
 
     try:
         r = fetch_url("https://www.karzanddolls.com/karzOffice/api/category", timeout=DEFAULT_TIMEOUT)
         r.raise_for_status()
+        new_hash = hashlib.sha256(r.content).hexdigest()
+
+        if new_hash == _CATEGORY_CACHE.get("hash") and _CATEGORY_CACHE.get("data"):
+            _CATEGORY_CACHE["timestamp"] = now
+            if client_etag and client_etag == new_hash:
+                return Response(status_code=304, headers={"ETag": f'"{new_hash}"'})
+            return JSONResponse(
+                content={"success": True, "categories": _CATEGORY_CACHE["data"], "hash": new_hash},
+                headers={"ETag": f'"{new_hash}"'}
+            )
+
         raw = r.json()
         raw_cats = raw.get("data", []) if isinstance(raw, dict) else []
 
@@ -785,44 +805,44 @@ def get_categories(request: Request):
                         "slug": sc_slug,
                         "url": f"https://www.karzanddolls.com/{sc_slug}/{sc_slug}"
                     })
-                series_list.sort(key=lambda x: (x.get("name") or "").strip().lower())
                 subcats.append({
                     "name": sc_name,
                     "slug": sc_slug,
                     "series": series_list
                 })
             if subcats:
-                subcats.sort(key=lambda x: (x.get("name") or "").strip().lower())
                 parsed_categories.append({
                     "name": c_title,
                     "slug": c_slug,
                     "subcategories": subcats
                 })
 
-        parsed_categories.sort(key=lambda x: (x.get("name") or "").strip().lower())
-
         _CATEGORY_CACHE["data"] = parsed_categories
+        _CATEGORY_CACHE["hash"] = new_hash
         _CATEGORY_CACHE["timestamp"] = now
-        return {"success": True, "categories": parsed_categories}
+
+        if client_etag and client_etag == new_hash:
+            return Response(status_code=304, headers={"ETag": f'"{new_hash}"'})
+
+        return JSONResponse(
+            content={"success": True, "categories": parsed_categories, "hash": new_hash},
+            headers={"ETag": f'"{new_hash}"'}
+        )
     except Exception as e:
         if _CATEGORY_CACHE["data"]:
-            return {"success": True, "categories": _CATEGORY_CACHE["data"], "stale": True}
-        return {"success": False, "error": f"Failed to fetch live categories: {_clean_error_message(e)}", "categories": []}
+            return JSONResponse(
+                content={"success": True, "categories": _CATEGORY_CACHE["data"], "hash": _CATEGORY_CACHE.get("hash", ""), "stale": True},
+                headers={"ETag": f'"{_CATEGORY_CACHE.get("hash", "")}"'}
+            )
+        return JSONResponse(
+            content={"success": False, "error": f"Failed to fetch live categories: {_clean_error_message(e)}", "categories": []},
+            status_code=500
+        )
 
 
 _CATALOG_CACHE: dict[str, tuple[list[SearchItem], float]] = {}
 CATALOG_CACHE_TTL = 600
 CATALOG_CACHE_MAX_SIZE = 50
-
-DEFAULT_DISCOVERY_URLS = [
-    ("https://www.karzanddolls.com/mini-gt/mini-gt", "Mini GT", "Mini GT"),
-    ("https://www.karzanddolls.com/mini-gt/kaido-house", "Mini GT", "Kaido House"),
-    ("https://www.karzanddolls.com/mini-gt/qubecarz", "Mini GT", "Qubecarz"),
-    ("https://www.karzanddolls.com/pop-race/pop-race", "Pop Race", "Pop Race"),
-    ("https://www.karzanddolls.com/inno64/inno64-model-cars", "Inno64", "Inno64"),
-    ("https://www.karzanddolls.com/hot-wheels/card-art-premiums", "Hot Wheels", "Card Art Premiums"),
-    ("https://www.karzanddolls.com/pre-orders/pre-order-minigt", "Pre-Orders", "Mini GT Pre-orders"),
-]
 
 
 def _fetch_lineup_products(target_url: str, default_brand: str = "", default_subcat: str = "") -> list[SearchItem]:
@@ -889,28 +909,47 @@ def get_catalog(
                     target_url = f"https://www.karzanddolls.com/{c_slug}/{b_slug}"
                     all_products = _fetch_lineup_products(target_url, default_brand=b_slug, default_subcat="")
         else:
-            if category and category.lower() != "cars":
+            if category and category.lower() not in ("cars", "all", ""):
                 c_slug = category.strip()
                 target_url = f"https://www.karzanddolls.com/{c_slug}/{c_slug}"
                 all_products = _fetch_lineup_products(target_url, default_brand=c_slug, default_subcat="")
-            else:
-                seen_urls = set()
-                combined: list[SearchItem] = []
-                with ThreadPoolExecutor(max_workers=5) as executor:
-                    future_to_info = {
-                        executor.submit(_fetch_lineup_products, u, b, s): (b, s)
-                        for (u, b, s) in DEFAULT_DISCOVERY_URLS
-                    }
-                    for future in as_completed(future_to_info):
-                        try:
-                            items = future.result()
-                            for it in items:
-                                if it.url not in seen_urls:
-                                    seen_urls.add(it.url)
-                                    combined.append(it)
-                        except Exception:
-                            pass
-                all_products = combined
+
+            if not all_products:
+                discovery_urls = []
+                if _CATEGORY_CACHE.get("data"):
+                    target_cat = next((c for c in _CATEGORY_CACHE["data"] if c.get("slug") == category), None)
+                    if not target_cat and _CATEGORY_CACHE["data"]:
+                        target_cat = _CATEGORY_CACHE["data"][0]
+                    if target_cat:
+                        for sub in target_cat.get("subcategories", []):
+                            for ser in sub.get("series", []):
+                                u = ser.get("url")
+                                if u:
+                                    discovery_urls.append((u, sub.get("name", ""), ser.get("name", "")))
+                            if len(discovery_urls) >= 6:
+                                break
+
+                if discovery_urls:
+                    seen_urls = set()
+                    combined: list[SearchItem] = []
+                    with ThreadPoolExecutor(max_workers=5) as executor:
+                        future_to_info = {
+                            executor.submit(_fetch_lineup_products, u, b, s): (b, s)
+                            for (u, b, s) in discovery_urls
+                        }
+                        for future in as_completed(future_to_info):
+                            try:
+                                items = future.result()
+                                for it in items:
+                                    if it.url not in seen_urls:
+                                        seen_urls.add(it.url)
+                                        combined.append(it)
+                            except Exception:
+                                pass
+                    all_products = combined
+
+            if not all_products:
+                all_products = _fetch_lineup_products("https://www.karzanddolls.com/", default_brand="Featured")
 
         if all_products:
             _CATALOG_CACHE[cache_key] = (all_products, now)
