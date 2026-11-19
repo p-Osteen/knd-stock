@@ -48,7 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const catalogSortSelect = document.getElementById('catalog-sort-select');
         const filterResetBtn = document.getElementById('filter-reset-btn');
 
-    const pillAll = document.getElementById('pill-all');
     const pillPreorders = document.getElementById('pill-preorders');
     const pillNewArrivals = document.getElementById('pill-new-arrivals');
 
@@ -958,7 +957,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setActivePill(activePillId) {
-        [pillAll, pillPreorders, pillNewArrivals].forEach(p => {
+        [pillPreorders, pillNewArrivals].forEach(p => {
             if (p) p.classList.toggle('active', p.id === activePillId);
         });
     }
@@ -972,13 +971,6 @@ document.addEventListener('DOMContentLoaded', () => {
             catalogState.subcategory === 'pre-order-minigt'
         ) {
             setActivePill('pill-preorders');
-        } else if (
-            (!catalogState.brand || catalogState.brand === 'all') &&
-            (!catalogState.subcategory || catalogState.subcategory === 'all') &&
-            (catalogState.category === 'cars' || !catalogState.category) &&
-            !catalogState.search
-        ) {
-            setActivePill('pill-all');
         } else {
             setActivePill('');
         }
@@ -1019,12 +1011,6 @@ document.addEventListener('DOMContentLoaded', () => {
             catalogState.sort = catalogSortSelect.value;
             catalogState.page = 1;
             fetchCatalog();
-        });
-    }
-
-    if (pillAll) {
-        pillAll.addEventListener('click', () => {
-            resetCatalogFilters();
         });
     }
 
